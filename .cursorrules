@@ -28,6 +28,11 @@ The system has two distinct lifecycles:
 ## Local prerequisites
 * Docker (for Postgres). Start DB: `docker compose up -d` from repo root.
 * Node + **pnpm** only for JS dependencies: `pnpm install` from repo root.
+* **Canonical runbook:** full clone-to-run steps, env vars, ports, and scripts live in the root **[README.md](README.md)**. Prefer updating that file when setup changes.
+
+## README & runbook (must do)
+* Whenever you add or change **one-time setup** (migrations, `docker compose` steps, `pnpm workflow:*`, etc.), **new or renamed environment variables**, **new root/workspace scripts**, or **non-obvious local config**, update **[README.md](README.md)** in the **same change** (or immediately after) so the project can always be initialized and run from that file alone.
+* Keep **`packages/backend/.env.example`** (and any future package-level `.env.example` files) aligned with required variables; reflect new keys in README when they matter for running the app.
 
 ## SQL quick reference (Postgres)
 * Clear rows: `DELETE FROM sessions;` (no `*` after `DELETE`). Truncate: `TRUNCATE sessions;`
