@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+# pnpm when `store-dir` is set inside the repo (default store is global, outside the tree)
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and debug
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Caches
+.cache/
+.parcel-cache/
+.turbo/
+.eslintcache
+.prettiercache
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor / IDE (keep shared editor config if you add it with a negated rule)
+.idea/
+*.swp
+*.swo
+*~
+
+# Optional local Docker overrides
+docker-compose.override.yml
