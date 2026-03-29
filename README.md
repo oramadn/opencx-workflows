@@ -26,7 +26,7 @@ docker compose up -d
 
 Default database: **`workflows`**, user **`postgres`**, password **`password`**, port **`5432`**.
 
-On the **first** start with an **empty** data volume, scripts in `docker/postgres/init/` run automatically (`01-schema.sql`, `02-session-messages.sql`). If you already had an old volume **without** those files, either run the SQL manually or reset data:
+On the **first** start with an **empty** data volume, scripts in `docker/postgres/init/` run automatically (`01-schema.sql`, `02-session-messages.sql`). If you already had an old volume or the init SQL changed (e.g. `trigger_events` column update), reset data:
 
 ```bash
 docker compose down -v   # destructive: deletes the Docker volume
@@ -44,6 +44,7 @@ Edit `packages/backend/.env` if your Postgres URL or ports differ. Variables:
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | App DB connection (Express + `pg`) |
+| `OPENAI_API_KEY` | **Required** for the workflow builder's LLM generation pipeline (get one from [platform.openai.com](https://platform.openai.com/api-keys)) |
 | `WORKFLOW_TARGET_WORLD` | Set to `@workflow/world-postgres` when using Workflow DevKit |
 | `WORKFLOW_POSTGRES_URL` | Workflow / queue DB (defaults to `DATABASE_URL` if unset) |
 
@@ -80,9 +81,18 @@ Use **three terminals** from the repo root (Postgres container already running).
 The Vite dev server **proxies** `/api` to `http://localhost:3001` (see `packages/frontend/vite.config.ts`).
 
 - **Inbox / sessions UI:** [http://localhost:5173/inbox](http://localhost:5173/inbox)  
-- **API:** e.g. `GET http://localhost:3001/api/sessions`  
+- **Workflow builder:** [http://localhost:5173/workflows](http://localhost:5173/workflows)  
+- **API:** e.g. `GET http://localhost:3001/api/sessions`, `GET http://localhost:3001/api/workflows`  
 
 Product and API details: **[docs/inbox.md](docs/inbox.md)**.
+
+### Workflow builder API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/workflows` | List all workflows |
+| `GET` | `/api/workflows/:id` | Get a single workflow (includes generated code) |
+| `POST` | `/api/workflows/generate` | Generate or refine a workflow via LLM (`{ prompt, workflowId? }`) |
 
 ## Root scripts (reference)
 

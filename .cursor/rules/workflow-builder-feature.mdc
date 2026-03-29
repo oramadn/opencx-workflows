@@ -1,0 +1,24 @@
+---
+description: Workflow builder (agentic builder) — read docs/workflow-builder.md for SDK contracts, LLM generation pipeline, query builder, builder UI, and Phase 3 roadmap.
+globs:
+  - packages/backend/src/workflow-sdk.ts
+  - packages/backend/src/services/llm-generation.ts
+  - packages/backend/src/services/mock-tools.ts
+  - packages/backend/src/services/query-builder.ts
+  - packages/backend/src/routes/workflows.ts
+  - packages/frontend/src/pages/workflow-builder-page.tsx
+  - packages/frontend/src/pages/workflows-list-page.tsx
+  - packages/frontend/src/components/workflow/**
+  - packages/frontend/src/api/workflows.ts
+  - packages/frontend/src/types/workflow.ts
+  - docker/postgres/init/01-schema.sql
+alwaysApply: false
+---
+
+# Workflow builder feature context
+
+Full reference: **[docs/workflow-builder.md](docs/workflow-builder.md)** (SDK contracts, LLM pipeline, query builder, builder UI, data model, API, Phase 3 roadmap).
+
+Summary: user prompts generate sandboxed JavaScript via OpenAI. SDK types in `workflow-sdk.ts` are injected into the LLM system prompt as compiler instructions. Generic `QueryOptions` pattern powers data tools (`getSessions`, `getMessages`). Workflows subscribe to multiple triggers via `trigger_events TEXT[]`. Builder UI is a split-pane (prompt panel + shiki code viewer). Mock tools ready for `rivet-dev/sandbox-agent` injection.
+
+Consider these rules if they affect your changes.

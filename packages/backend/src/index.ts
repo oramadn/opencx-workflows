@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
 import { sessionsRouter } from "./routes/sessions.js";
+import { workflowsRouter } from "./routes/workflows.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -13,6 +14,7 @@ app.use(
 app.use(express.json({ limit: "1mb" }));
 
 app.use("/api/sessions", sessionsRouter());
+app.use("/api/workflows", workflowsRouter());
 
 app.listen(PORT, () => {
   console.log(`Backend listening on http://localhost:${PORT}`);

@@ -2,7 +2,8 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { AppShell } from "@/components/app-shell";
 import { InboxPage } from "@/pages/inbox-page";
-import { WorkflowsPlaceholderPage } from "@/pages/workflows-placeholder-page";
+import { WorkflowBuilderPage } from "@/pages/workflow-builder-page";
+import { WorkflowsListPage } from "@/pages/workflows-list-page";
 
 export default function App() {
   return (
@@ -10,7 +11,9 @@ export default function App() {
       <Route element={<AppShell />}>
         <Route path="/" element={<Navigate to="/inbox" replace />} />
         <Route path="/inbox" element={<InboxPage />} />
-        <Route path="/workflows" element={<WorkflowsPlaceholderPage />} />
+        <Route path="/workflows" element={<WorkflowsListPage />} />
+        <Route path="/workflows/new" element={<WorkflowBuilderPage />} />
+        <Route path="/workflows/:id" element={<WorkflowBuilderPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/inbox" replace />} />
     </Routes>

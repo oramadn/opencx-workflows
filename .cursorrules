@@ -18,12 +18,13 @@ The system has two distinct lifecycles:
 
 ## Repository Layout (implemented)
 * **Root:** `package.json` with convenience scripts; `docker-compose.yml`; `pnpm-workspace.yaml`
-* **Postgres init DDL:** `docker/postgres/init/*.sql` (e.g. `01-schema.sql`, `02-session-messages.sql`)—mounted into `/docker-entrypoint-initdb.d` (runs only on **first** empty volume). Enables `uuid-ossp`; creates `sessions`, `workflows`, `session_messages`, plus partial index `idx_workflows_trigger_event` on active workflows by `trigger_event`
+* **Postgres init DDL:** `docker/postgres/init/*.sql` (e.g. `01-schema.sql`, `02-session-messages.sql`)—mounted into `/docker-entrypoint-initdb.d` (runs only on **first** empty volume). Enables `uuid-ossp`; creates `sessions`, `workflows`, `session_messages`, plus GIN index `idx_workflows_trigger_events` on active workflows by `trigger_events`
 * **Frontend:** `packages/frontend/`—`pnpm frontend` (dev), `pnpm frontend:build`, `pnpm frontend:preview`
 * **Backend:** `packages/backend/`—`pnpm backend` / `pnpm backend:dev`. Default DB URL if unset: `postgresql://postgres:password@localhost:5432/workflows` (`DATABASE_URL` overrides). Copy `packages/backend/.env.example` → `.env` for local vars. **`pnpm workflow:postgres-setup`** — apply Workflow DevKit Postgres world schema (adds tables/schemas alongside app DDL; safe to re-run).
 
 ## Feature documentation
 * **Inbox (sessions prototype):** [docs/inbox.md](docs/inbox.md) — product behavior, data model, REST API, frontend layout, local run, and intentional non-goals. Cursor applies [.cursor/rules/inbox-feature.mdc](.cursor/rules/inbox-feature.mdc) when editing inbox-related paths (see file for globs).
+* **Workflow builder (agentic builder):** [docs/workflow-builder.md](docs/workflow-builder.md) — SDK contracts, LLM generation pipeline, generic query builder, builder UI, data model, REST API, and Phase 3 roadmap. Cursor applies [.cursor/rules/workflow-builder-feature.mdc](.cursor/rules/workflow-builder-feature.mdc) when editing builder-related paths (see file for globs).
 
 ## Local prerequisites
 * Docker (for Postgres). Start DB: `docker compose up -d` from repo root.
@@ -74,6 +75,6 @@ Layer-style scopes are only reasonable for **purely local** changes, e.g. bumpin
 
 ## Database Schema Reference (Core)
 * `sessions`: `id` (UUID, default `uuid_generate_v4()`), `customer_name`, `status` (default `'open'`), `sentiment` (nullable; set on close), `created_at`, `updated_at` (timestamptz)
-* `workflows`: `id` (UUID), `name`, `trigger_event`, `original_prompt`, `generated_code`, `is_active` (default true), `created_at`, `updated_at` (timestamptz)
+* `workflows`: `id` (UUID), `name`, `trigger_events` (TEXT[], default `'{}'`), `original_prompt`, `generated_code`, `is_active` (default true), `created_at`, `updated_at` (timestamptz)
 * `session_messages`: `id` (UUID), `session_id` (FK → `sessions`), `author_role` (`customer` \| `agent`), `body`, `created_at` (timestamptz)
 * **Workflow DevKit (Postgres world):** additional tables/schemas created by `pnpm workflow:postgres-setup` (not in Docker `init/` SQL); includes **graphile-worker** schema for jobs
