@@ -6,6 +6,7 @@ import {
   sessionToJson,
   messageToJson,
 } from "../lib/row-mappers.js";
+import { dispatchTrigger } from "../services/workflow-dispatcher.js";
 
 const MAX_BODY_LEN = 10_000;
 
@@ -41,7 +42,17 @@ export function sessionsRouter(): express.Router {
        RETURNING id, customer_name, status, sentiment, created_at, updated_at`,
       [customerName],
     );
-    res.status(201).json(sessionToJson(rows[0]!));
+    const session = rows[0]!;
+    res.status(201).json(sessionToJson(session));
+
+    void dispatchTrigger("onSessionOpened", {
+      triggerType: "onSessionOpened",
+      sessionId: session.id,
+      customerName: session.customer_name,
+      createdAt: session.created_at.toISOString(),
+    }).catch((err) =>
+      console.error("[dispatch] onSessionOpened failed:", err),
+    );
   });
 
   r.get("/:id", async (req: Request, res: Response) => {
@@ -164,7 +175,18 @@ export function sessionsRouter(): express.Router {
       return;
     }
 
-    res.json(sessionToJson(rows[0]!));
+    const session = rows[0]!;
+    res.json(sessionToJson(session));
+
+    void dispatchTrigger("onSessionClosed", {
+      triggerType: "onSessionClosed",
+      sessionId: session.id,
+      customerName: session.customer_name,
+      sentiment: session.sentiment as "happy" | "neutral" | "angry",
+      createdAt: session.created_at.toISOString(),
+    }).catch((err) =>
+      console.error("[dispatch] onSessionClosed failed:", err),
+    );
   });
 
   return r;
