@@ -1,5 +1,11 @@
 import express, { type Request, type Response } from "express";
 import { pool } from "../db.js";
+import {
+  type SessionRow,
+  type MessageRow,
+  sessionToJson,
+  messageToJson,
+} from "../lib/row-mappers.js";
 
 const MAX_BODY_LEN = 10_000;
 
@@ -8,44 +14,6 @@ const UUID_RE =
 
 function isUuid(s: string): boolean {
   return UUID_RE.test(s);
-}
-
-type SessionRow = {
-  id: string;
-  customer_name: string;
-  status: string;
-  sentiment: string | null;
-  created_at: Date;
-  updated_at: Date;
-};
-
-type MessageRow = {
-  id: string;
-  session_id: string;
-  author_role: string;
-  body: string;
-  created_at: Date;
-};
-
-function sessionToJson(row: SessionRow) {
-  return {
-    id: row.id,
-    customerName: row.customer_name,
-    status: row.status,
-    sentiment: row.sentiment,
-    createdAt: row.created_at.toISOString(),
-    updatedAt: row.updated_at.toISOString(),
-  };
-}
-
-function messageToJson(row: MessageRow) {
-  return {
-    id: row.id,
-    sessionId: row.session_id,
-    authorRole: row.author_role,
-    body: row.body,
-    createdAt: row.created_at.toISOString(),
-  };
 }
 
 export function sessionsRouter(): express.Router {

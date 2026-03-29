@@ -3,7 +3,7 @@
  *
  * Responsibilities:
  *   1. Parse the WorkflowEvent from the WORKFLOW_EVENT_JSON env var.
- *   2. Build a stub `tools` object (console.log for actions, mock data for queries).
+ *   2. Build a `tools` object (host-backed when configured, mock fallback otherwise).
  *   3. Dynamically import the LLM-generated `workflow.mjs` and call its default export.
  *
  * This file is written verbatim into the sandbox filesystem before each run.
@@ -24,51 +24,99 @@ try {
   process.exit(1);
 }
 
+const toolsBaseUrl = (process.env.WORKFLOW_TOOLS_BASE_URL || "").replace(
+  /\/$/,
+  "",
+);
+const toolsSecret = process.env.WORKFLOW_TOOLS_SECRET || "";
+const hasToolsApi = Boolean(toolsBaseUrl && toolsSecret);
+
+async function queryHost(resource, options) {
+  const res = await fetch(
+    `${toolsBaseUrl}/api/internal/workflow-tools/query`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${toolsSecret}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ resource, options: options ?? undefined }),
+    },
+  );
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(
+      `Workflow tools query failed (${res.status}): ${text}`,
+    );
+  }
+
+  return res.json();
+}
+
+const MOCK_SESSIONS = [
+  {
+    id: "00000000-0000-0000-0000-000000000001",
+    customerName: "Alice Mock",
+    status: "closed",
+    sentiment: "angry",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000002",
+    customerName: "Bob Mock",
+    status: "open",
+    sentiment: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+const MOCK_MESSAGES = [
+  {
+    id: "00000000-0000-0000-0000-000000000010",
+    sessionId: "00000000-0000-0000-0000-000000000001",
+    authorRole: "customer",
+    body: "I am very unhappy with the service!",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000011",
+    sessionId: "00000000-0000-0000-0000-000000000001",
+    authorRole: "agent",
+    body: "I am sorry to hear that. Let me help.",
+    createdAt: new Date().toISOString(),
+  },
+];
+
 const tools = {
   async getSessions(options) {
+    if (!hasToolsApi) {
+      console.log(
+        JSON.stringify({ tool: "getSessions", options: options ?? {}, mock: true }),
+      );
+      return MOCK_SESSIONS;
+    }
+
     console.log(
       JSON.stringify({ tool: "getSessions", options: options ?? {} }),
     );
-    return [
-      {
-        id: "00000000-0000-0000-0000-000000000001",
-        customerName: "Alice Mock",
-        status: "closed",
-        sentiment: "angry",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      {
-        id: "00000000-0000-0000-0000-000000000002",
-        customerName: "Bob Mock",
-        status: "open",
-        sentiment: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-    ];
+    return queryHost("sessions", options);
   },
 
   async getMessages(options) {
+    if (!hasToolsApi) {
+      console.log(
+        JSON.stringify({ tool: "getMessages", options: options ?? {}, mock: true }),
+      );
+      return MOCK_MESSAGES;
+    }
+
     console.log(
       JSON.stringify({ tool: "getMessages", options: options ?? {} }),
     );
-    return [
-      {
-        id: "00000000-0000-0000-0000-000000000010",
-        sessionId: "00000000-0000-0000-0000-000000000001",
-        authorRole: "customer",
-        body: "I am very unhappy with the service!",
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "00000000-0000-0000-0000-000000000011",
-        sessionId: "00000000-0000-0000-0000-000000000001",
-        authorRole: "agent",
-        body: "I am sorry to hear that. Let me help.",
-        createdAt: new Date().toISOString(),
-      },
-    ];
+    return queryHost("session_messages", options);
   },
 
   async sendEmail(to, subject, body) {

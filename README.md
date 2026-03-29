@@ -51,6 +51,8 @@ Edit `packages/backend/.env` if your Postgres URL or ports differ. Variables:
 | `RESEND_API_KEY` | [Resend](https://resend.com/) API key for the `sendEmail` workflow tool. Without it, `sendEmail` falls back to a console.log stub. |
 | `RESEND_FROM_EMAIL` | Sender address for workflow emails (defaults to `onboarding@resend.dev`, Resend's built-in test sender). |
 | `SLACK_BOT_TOKEN` | [Slack](https://api.slack.com/apps) Bot User OAuth Token (`xoxb-...`) for the `sendSlackChannelMessage` workflow tool. Without it, the tool falls back to a console.log stub. The bot must be invited to any channel it posts to. |
+| `WORKFLOW_TOOLS_BASE_URL` | Publicly reachable URL of the backend (e.g. an ngrok/Cloudflare tunnel to `localhost:3001`). The E2B harness calls back to this URL for real `getSessions`/`getMessages` DB queries. Without it, data tools return mock arrays. |
+| `WORKFLOW_TOOLS_SECRET` | Shared secret that authenticates harness requests to `POST /api/internal/workflow-tools/query`. Generate a long random string (e.g. `openssl rand -hex 32`). |
 
 ### 4. Workflow DevKit schema (Postgres world)
 

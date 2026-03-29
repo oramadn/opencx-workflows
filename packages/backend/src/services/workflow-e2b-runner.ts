@@ -39,6 +39,12 @@ export async function runWorkflowInSandbox(
         ...(process.env.SLACK_BOT_TOKEN && {
           SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN,
         }),
+        ...(process.env.WORKFLOW_TOOLS_BASE_URL && {
+          WORKFLOW_TOOLS_BASE_URL: process.env.WORKFLOW_TOOLS_BASE_URL,
+        }),
+        ...(process.env.WORKFLOW_TOOLS_SECRET && {
+          WORKFLOW_TOOLS_SECRET: process.env.WORKFLOW_TOOLS_SECRET,
+        }),
       },
       timeoutMs: COMMAND_TIMEOUT_MS,
     });

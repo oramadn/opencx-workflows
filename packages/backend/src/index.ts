@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import { internalWorkflowToolsRouter } from "./routes/internal-workflow-tools.js";
 import { sessionsRouter } from "./routes/sessions.js";
 import { workflowsRouter } from "./routes/workflows.js";
 
@@ -15,6 +16,7 @@ app.use(express.json({ limit: "1mb" }));
 
 app.use("/api/sessions", sessionsRouter());
 app.use("/api/workflows", workflowsRouter());
+app.use("/api/internal/workflow-tools", internalWorkflowToolsRouter());
 
 app.listen(PORT, () => {
   console.log(`Backend listening on http://localhost:${PORT}`);
