@@ -9,10 +9,7 @@
     "backend:dev": "pnpm --filter @workflows/backend dev",
     "frontend": "pnpm --filter @workflows/frontend dev",
     "frontend:build": "pnpm --filter @workflows/frontend build",
-    "frontend:preview": "pnpm --filter @workflows/frontend preview",
-    "worker": "pnpm --filter @workflows/worker start",
-    "worker:dev": "pnpm --filter @workflows/worker dev",
-    "worker:migrate": "pnpm --filter @workflows/worker migrate"
+    "frontend:preview": "pnpm --filter @workflows/frontend preview"
   },
   "license": "ISC",
   "packageManager": "pnpm@10.33.0",

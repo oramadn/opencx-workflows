@@ -11,18 +11,16 @@ The system has two distinct lifecycles:
 * **Monorepo:** pnpm workspaces (`pnpm-workspace.yaml` → `packages/*`)
 * **Frontend:** React 19, TypeScript, Vite 6, Tailwind CSS v4 (`@tailwindcss/vite`), package `@workflows/frontend` in `packages/frontend/`
 * **Backend:** Node.js, TypeScript, Express — package `@workflows/backend` in `packages/backend/`
-* **Worker / queue:** Graphile Worker, package `@workflows/worker` in `packages/worker/` (migrations + long-running `run()` with task handlers under `src/tasks/`)
 * **Linting:** ESLint 9 (flat config `eslint.config.mjs`) with `@eslint/js` recommended, `typescript-eslint` recommended, React + React Hooks recommended — run `pnpm lint` from repo root
 * **Database:** PostgreSQL 16+ via Docker (`postgres:alpine`), database `workflows`, user `postgres`, password `password`, host port `5432`
-* **Queue / Durable Execution:** Graphile Worker (PostgreSQL-backed, no Redis); schema lives in `graphile_worker` and is applied via `pnpm worker:migrate` or on worker startup
+* **Queue / durable execution:** Not implemented yet; when added, workflow runs should be **durable** and **off the HTTP request thread** (e.g. Postgres-backed jobs)
 * **Sandboxing:** `rivet-dev/sandbox-agent` (for secure execution of AI-generated code)—**not wired up yet**
 
 ## Repository Layout (implemented)
 * **Root:** `package.json` with convenience scripts; `docker-compose.yml`; `pnpm-workspace.yaml`
 * **Postgres init DDL:** `docker/postgres/init/*.sql` (e.g. `01-schema.sql`, `02-session-messages.sql`)—mounted into `/docker-entrypoint-initdb.d` (runs only on **first** empty volume). Enables `uuid-ossp`; creates `sessions`, `workflows`, `session_messages`, plus partial index `idx_workflows_trigger_event` on active workflows by `trigger_event`
 * **Frontend:** `packages/frontend/`—`pnpm frontend` (dev), `pnpm frontend:build`, `pnpm frontend:preview`
-* **Backend:** `packages/backend/`—`pnpm backend` / `pnpm backend:dev` (default `DATABASE_URL` same as worker)
-* **Worker:** `packages/worker/`—`pnpm worker` / `pnpm worker:dev`, `pnpm worker:migrate`. Default connection string if unset: `postgresql://postgres:password@localhost:5432/workflows` (`DATABASE_URL` overrides)
+* **Backend:** `packages/backend/`—`pnpm backend` / `pnpm backend:dev`. Default DB URL if unset: `postgresql://postgres:password@localhost:5432/workflows` (`DATABASE_URL` overrides)
 
 ## Feature documentation
 * **Inbox (sessions prototype):** [docs/inbox.md](docs/inbox.md) — product behavior, data model, REST API, frontend layout, local run, and intentional non-goals. Cursor applies [.cursor/rules/inbox-feature.mdc](.cursor/rules/inbox-feature.mdc) when editing inbox-related paths (see file for globs).
@@ -36,13 +34,13 @@ The system has two distinct lifecycles:
 
 ## Core Architectural Rules & Constraints
 * **NO Vercel Infrastructure:** Do not use or suggest Vercel-specific features (e.g., Vercel KV, Vercel Functions, Vercel Workflows). The architecture must remain infrastructure-agnostic and run entirely locally for the prototype.
-* **Durable Execution:** All workflow executions must be handled durably via Postgres and Graphile Worker. Do not execute workflows synchronously in the main thread.
+* **Durable execution:** When workflow execution is implemented, it must be **durable** (survive restarts) and **not** run synchronously on the API request thread—use a queue or similar Postgres-backed mechanism. (No worker package in the repo yet.)
 * **Sandboxed Execution:** AI-generated code must NEVER have direct access to the Node.js host environment, file system, or raw network. It must strictly run inside `rivet-dev/sandbox-agent` and only communicate with the host via explicitly injected, typed functions (the SDK).
 * **Mock App Constraints:** Keep the customer support domain "stupid simple." A session only needs an ID, customer name, status ('open' or 'closed'), and sentiment ('happy', 'neutral', 'angry'). Do not build real AI sentiment analysis; rely on manual UI inputs to mock the sentiment for now.
 
 ## Git commits (Conventional Commits)
 
-This repo is **fullstack**: most work spans UI, API, schema, and sometimes the worker. Commits should reflect **what changed for the product or task**, not which package folder you touched.
+This repo is **fullstack**: most work spans UI, API, and schema. Commits should reflect **what changed for the product or task**, not which package folder you touched.
 
 **Format:** `type(optional-scope): imperative summary` (see [Conventional Commits](https://www.conventionalcommits.org/)).
 
@@ -56,7 +54,7 @@ This repo is **fullstack**: most work spans UI, API, schema, and sometimes the w
 
 **Scopes — avoid as the default pattern**
 
-* Do **not** use stack-layer scopes such as `feat(backend)`, `feat(frontend)`, or `fix(worker)` for product work. A single user-facing change often belongs in **one commit** that updates API, UI, and SQL together; splitting by layer creates noisy history and mismatches how tickets are delivered.
+* Do **not** use stack-layer scopes such as `feat(backend)` or `feat(frontend)` for product work. A single user-facing change often belongs in **one commit** that updates API, UI, and SQL together; splitting by layer creates noisy history and mismatches how tickets are delivered.
 
 Layer-style scopes are only reasonable for **purely local** changes, e.g. bumping a devDependency that only affects one package, or a mechanical rename inside one app with no behavioral coupling—still prefer a concrete scope (`chore(vite): bump to 6.x`) over a vague `frontend` when you can.
 
@@ -73,4 +71,3 @@ Layer-style scopes are only reasonable for **purely local** changes, e.g. bumpin
 * `sessions`: `id` (UUID, default `uuid_generate_v4()`), `customer_name`, `status` (default `'open'`), `sentiment` (nullable; set on close), `created_at`, `updated_at` (timestamptz)
 * `workflows`: `id` (UUID), `name`, `trigger_event`, `original_prompt`, `generated_code`, `is_active` (default true), `created_at`, `updated_at` (timestamptz)
 * `session_messages`: `id` (UUID), `session_id` (FK → `sessions`), `author_role` (`customer` \| `agent`), `body`, `created_at` (timestamptz)
-* **Graphile Worker:** separate `graphile_worker` schema (managed by the library; not in `01-schema.sql`)

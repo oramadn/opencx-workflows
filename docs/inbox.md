@@ -64,7 +64,7 @@ Errors return JSON `{ error: string }` where implemented.
 
 ## Intentional non-goals (so far)
 
-- No workflow execution on `session.closed` (Graphile Worker not wired to this event yet).
+- No workflow execution on `session.closed` (no background job queue wired to this event yet).
 - No auth, no real customer identity, no LLM sentiment.
 - No WebSocket / SSE; polling only.
 
