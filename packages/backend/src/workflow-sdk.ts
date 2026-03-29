@@ -99,7 +99,8 @@ export interface WorkflowTools {
 
   /**
    * Send a message to a public Slack channel.
-   * @param channelName Channel name without the # (e.g. 'alerts').
+   * The bot must be invited to the target channel.
+   * @param channelName Channel name without the # (e.g. 'alerts'), or a Slack channel ID.
    * @param message     Text content of the message.
    */
   sendSlackChannelMessage(

@@ -275,6 +275,7 @@ Split-pane layout: **prompt panel** (left, ~40%) + **code viewer** (right, ~60%)
 | `E2B_API_KEY` | When executing workflows in E2B | API key from [e2b.dev](https://e2b.dev/) (Hobby includes credits). Used by the backend to spawn sandboxes and run the harness + generated code. |
 | `RESEND_API_KEY` | For real `sendEmail` | API key from [resend.com](https://resend.com/). Forwarded into the E2B sandbox so the harness can call the Resend REST API. Falls back to a console.log stub when absent. |
 | `RESEND_FROM_EMAIL` | No (default: `onboarding@resend.dev`) | Sender address for emails. Defaults to Resend's built-in test sender. |
+| `SLACK_BOT_TOKEN` | For real `sendSlackChannelMessage` | Bot User OAuth Token (`xoxb-...`) from [api.slack.com/apps](https://api.slack.com/apps). Forwarded into the E2B sandbox so the harness can call `chat.postMessage`. Falls back to a console.log stub when absent. The bot must have the `chat:write` scope and be invited to the target channel. |
 
 The backend loads `.env` via `--env-file=.env` in the `tsx` dev/start scripts.
 
@@ -282,7 +283,6 @@ The backend loads `.env` via `--env-file=.env` in the `tsx` dev/start scripts.
 
 - **E2B execution:** not integrated yet. Planned: `@e2b/sdk` (or `@e2b/code-interpreter`) from the backend, harness + `workflow.mjs` in the sandbox, then `node` (or `runCode`) for a test/dispatch path. Mock tools + query builder on the host remain the dev defaults until the harness calls the API for real data.
 - **Event dispatch:** no code fires workflows when sessions open/close. The `trigger_events` GIN index and dispatch query pattern are designed for this.
-- **Real action tools:** `sendSlackChannelMessage` is a mock. `sendEmail` is wired to **Resend** (the harness calls the Resend REST API via `fetch` when `RESEND_API_KEY` is set; falls back to a console.log stub otherwise).
 - **Real data tools:** `getSessions` and `getMessages` use mock data. Switch to `query-builder.ts` + `pool.query` for real queries.
 - **Prompt history persistence:** prompt log is ephemeral. Could add a `prompt_history JSONB` column if needed.
 - **Workflow activation/deactivation:** `is_active` column exists but no UI toggle.

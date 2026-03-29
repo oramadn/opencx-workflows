@@ -36,6 +36,9 @@ export async function runWorkflowInSandbox(
         ...(process.env.RESEND_FROM_EMAIL && {
           RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
         }),
+        ...(process.env.SLACK_BOT_TOKEN && {
+          SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN,
+        }),
       },
       timeoutMs: COMMAND_TIMEOUT_MS,
     });

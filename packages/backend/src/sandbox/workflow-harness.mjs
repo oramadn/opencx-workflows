@@ -105,8 +105,48 @@ const tools = {
   },
 
   async sendSlackChannelMessage(channelName, message) {
+    const token = process.env.SLACK_BOT_TOKEN;
+
+    if (!token) {
+      console.log(
+        JSON.stringify({
+          tool: "sendSlackChannelMessage",
+          channelName,
+          message,
+          mock: true,
+        }),
+      );
+      return;
+    }
+
+    const channel =
+      channelName.startsWith("#") || channelName.startsWith("C")
+        ? channelName
+        : `#${channelName}`;
+
+    const res = await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ channel, text: message }),
+    });
+
+    const result = await res.json();
+
+    if (!result.ok) {
+      throw new Error(
+        `sendSlackChannelMessage failed: ${result.error ?? JSON.stringify(result)}`,
+      );
+    }
+
     console.log(
-      JSON.stringify({ tool: "sendSlackChannelMessage", channelName, message }),
+      JSON.stringify({
+        tool: "sendSlackChannelMessage",
+        channel: result.channel,
+        ts: result.ts,
+      }),
     );
   },
 };
