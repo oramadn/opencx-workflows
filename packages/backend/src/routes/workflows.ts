@@ -150,6 +150,7 @@ export function workflowsRouter(): express.Router {
     triggerType: z.literal("onSessionClosed"),
     sessionId: z.string().min(1),
     customerName: z.string().min(1),
+    customerEmail: z.string().min(1),
     sentiment: z.enum(["happy", "neutral", "angry"]),
     createdAt: z.string().min(1),
   });
@@ -158,6 +159,7 @@ export function workflowsRouter(): express.Router {
     triggerType: z.literal("onSessionOpened"),
     sessionId: z.string().min(1),
     customerName: z.string().min(1),
+    customerEmail: z.string().min(1),
     createdAt: z.string().min(1),
   });
 

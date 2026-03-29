@@ -14,6 +14,7 @@ export interface SessionClosedEvent {
   triggerType: "onSessionClosed";
   sessionId: string;
   customerName: string;
+  customerEmail: string;
   sentiment: "happy" | "neutral" | "angry";
   createdAt: string;
 }
@@ -22,6 +23,7 @@ export interface SessionOpenedEvent {
   triggerType: "onSessionOpened";
   sessionId: string;
   customerName: string;
+  customerEmail: string;
   createdAt: string;
 }
 
@@ -53,6 +55,7 @@ export interface QueryOptions {
 export interface SessionResult {
   id: string;
   customerName: string;
+  customerEmail: string;
   status: string;
   sentiment: string | null;
   createdAt: string;

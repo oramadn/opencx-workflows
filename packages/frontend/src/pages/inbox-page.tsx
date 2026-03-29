@@ -9,6 +9,7 @@ import {
   postMessage,
 } from "@/api/sessions";
 import { CloseSessionModal } from "@/components/close-session-modal";
+import { NewSessionModal } from "@/components/new-session-modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -39,6 +40,7 @@ export function InboxPage() {
   const [composer, setComposer] = useState("");
   const [authorRole, setAuthorRole] = useState<AuthorRole>("customer");
   const [closeOpen, setCloseOpen] = useState(false);
+  const [newSessionOpen, setNewSessionOpen] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
 
@@ -80,15 +82,10 @@ export function InboxPage() {
   const session = viewDetail?.session;
   const isOpen = session?.status === "open";
 
-  const handleNewSession = async () => {
-    setSendError(null);
-    try {
-      const s = await createSession();
-      await refreshList();
-      setSelectedId(s.id);
-    } catch {
-      setSendError("Failed to create session");
-    }
+  const handleNewSession = async (customerName: string, customerEmail: string) => {
+    const s = await createSession(customerName, customerEmail);
+    await refreshList();
+    setSelectedId(s.id);
   };
 
   const handleSend = async () => {
@@ -120,7 +117,7 @@ export function InboxPage() {
             type="button"
             size="icon-sm"
             variant="outline"
-            onClick={() => void handleNewSession()}
+            onClick={() => setNewSessionOpen(true)}
             title="New session"
           >
             <Plus className="size-4" />
@@ -189,7 +186,9 @@ export function InboxPage() {
                 <h1 className="truncate text-lg font-semibold tracking-tight">
                   {session.customerName}
                 </h1>
-                <p className="text-xs text-muted-foreground">
+                <p className="truncate text-xs text-muted-foreground">
+                  {session.customerEmail}
+                  {" · "}
                   {session.status === "open"
                     ? "Open — send as customer or agent below"
                     : `Closed — sentiment: ${session.sentiment ?? "—"}`}
@@ -310,6 +309,11 @@ export function InboxPage() {
         open={closeOpen}
         onOpenChange={setCloseOpen}
         onConfirm={handleCloseConfirm}
+      />
+      <NewSessionModal
+        open={newSessionOpen}
+        onOpenChange={setNewSessionOpen}
+        onConfirm={handleNewSession}
       />
     </div>
   );

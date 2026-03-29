@@ -13,6 +13,7 @@ const SAMPLE_EVENTS: Record<string, Record<string, unknown>> = {
     triggerType: "onSessionClosed",
     sessionId: "00000000-0000-0000-0000-000000000001",
     customerName: "Alice",
+    customerEmail: "alice@example.com",
     sentiment: "angry",
     createdAt: new Date().toISOString(),
   },
@@ -20,6 +21,7 @@ const SAMPLE_EVENTS: Record<string, Record<string, unknown>> = {
     triggerType: "onSessionOpened",
     sessionId: "00000000-0000-0000-0000-000000000002",
     customerName: "Bob",
+    customerEmail: "bob@example.com",
     createdAt: new Date().toISOString(),
   },
 };

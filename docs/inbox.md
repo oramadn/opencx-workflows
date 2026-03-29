@@ -10,7 +10,7 @@ Use this file for product and technical context when changing inbox UI, session 
 - The user sends messages as **Customer** or **Agent** (toggle). Messages are stored with `author_role` `customer` | `agent`. UI copy says **Agent**, not “support.”
 - **Close session** opens a modal: pick sentiment **happy** | **neutral** | **angry** (no LLM). The API sets `sessions.status = 'closed'` and `sessions.sentiment`.
 - After close, the thread is **read-only** (no composer).
-- **New session** creates a row with default `customer_name` `"Customer"` unless extended later.
+- **New session** opens a modal prompting for **customer name** and **email** (both required). The email is stored and made available to workflows.
 - The app **polls** the list and active session detail on an interval (~4s) for simplicity (no WebSockets).
 
 ## Layout (frontend)
@@ -24,6 +24,7 @@ Key paths:
 | Area | Location |
 |------|----------|
 | Inbox page | `packages/frontend/src/pages/inbox-page.tsx` |
+| New-session modal | `packages/frontend/src/components/new-session-modal.tsx` |
 | Close + sentiment modal | `packages/frontend/src/components/close-session-modal.tsx` |
 | Shell + nav | `packages/frontend/src/components/app-shell.tsx`, `nav-rail.tsx` |
 | API client | `packages/frontend/src/api/sessions.ts` |
@@ -36,7 +37,7 @@ Dev server proxies **`/api`** to the backend (`vite.config.ts` → `http://local
 
 Defined in Docker init SQL (runs on **first** empty DB volume only):
 
-- **`sessions`** (`01-schema.sql`): `id`, `customer_name`, `status` (`open` \| `closed`), `sentiment` (nullable until close), timestamps.
+- **`sessions`** (`01-schema.sql`): `id`, `customer_name`, `customer_email` (NOT NULL), `status` (`open` \| `closed`), `sentiment` (nullable until close), timestamps.
 - **`session_messages`** (`02-session-messages.sql`): `id`, `session_id` → `sessions`, `author_role` (`customer` \| `agent`), `body`, `created_at`. Index on `(session_id, created_at)`. Trigger bumps `sessions.updated_at` on new message.
 
 Existing volumes need a manual migration or `docker compose down -v` + recreate to pick up new init files.
@@ -48,7 +49,7 @@ Base path: **`/api/sessions`** (JSON). Backend: `packages/backend/src/routes/ses
 | Method | Path | Body | Notes |
 |--------|------|------|--------|
 | `GET` | `/api/sessions` | — | List sessions, newest activity first |
-| `POST` | `/api/sessions` | `{ customerName?: string }` | Optional name; default `"Customer"` |
+| `POST` | `/api/sessions` | `{ customerName: string, customerEmail: string }` | Both required |
 | `GET` | `/api/sessions/:id` | — | `{ session, messages[] }` |
 | `POST` | `/api/sessions/:id/messages` | `{ authorRole, body }` | `authorRole` must be `customer` or `agent`; `body` trimmed, max 10k chars; **409** if session closed |
 | `PATCH` | `/api/sessions/:id/close` | `{ sentiment }` | `happy` \| `neutral` \| `angry`; **409** if already closed |

@@ -12,6 +12,7 @@ const RESOURCES: Record<string, ResourceConfig> = {
     fields: {
       id: "id",
       customerName: "customer_name",
+      customerEmail: "customer_email",
       status: "status",
       sentiment: "sentiment",
       createdAt: "created_at",

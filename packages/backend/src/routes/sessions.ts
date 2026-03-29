@@ -22,7 +22,7 @@ export function sessionsRouter(): express.Router {
 
   r.get("/", async (_req: Request, res: Response) => {
     const { rows } = await pool.query<SessionRow>(
-      `SELECT id, customer_name, status, sentiment, created_at, updated_at
+      `SELECT id, customer_name, customer_email, status, sentiment, created_at, updated_at
        FROM sessions
        ORDER BY updated_at DESC`,
     );
@@ -30,17 +30,24 @@ export function sessionsRouter(): express.Router {
   });
 
   r.post("/", async (req: Request, res: Response) => {
-    const raw = req.body?.customerName;
+    const rawName = req.body?.customerName;
     const customerName =
-      typeof raw === "string" && raw.trim() !== ""
-        ? raw.trim().slice(0, 255)
+      typeof rawName === "string" && rawName.trim() !== ""
+        ? rawName.trim().slice(0, 255)
         : "Customer";
 
+    const rawEmail = req.body?.customerEmail;
+    if (typeof rawEmail !== "string" || rawEmail.trim() === "") {
+      res.status(400).json({ error: "customerEmail is required" });
+      return;
+    }
+    const customerEmail = rawEmail.trim().slice(0, 255);
+
     const { rows } = await pool.query<SessionRow>(
-      `INSERT INTO sessions (customer_name)
-       VALUES ($1)
-       RETURNING id, customer_name, status, sentiment, created_at, updated_at`,
-      [customerName],
+      `INSERT INTO sessions (customer_name, customer_email)
+       VALUES ($1, $2)
+       RETURNING id, customer_name, customer_email, status, sentiment, created_at, updated_at`,
+      [customerName, customerEmail],
     );
     const session = rows[0]!;
     res.status(201).json(sessionToJson(session));
@@ -49,6 +56,7 @@ export function sessionsRouter(): express.Router {
       triggerType: "onSessionOpened",
       sessionId: session.id,
       customerName: session.customer_name,
+      customerEmail: session.customer_email,
       createdAt: session.created_at.toISOString(),
     }).catch((err) =>
       console.error("[dispatch] onSessionOpened failed:", err),
@@ -63,7 +71,7 @@ export function sessionsRouter(): express.Router {
     }
 
     const sessionResult = await pool.query<SessionRow>(
-      `SELECT id, customer_name, status, sentiment, created_at, updated_at
+      `SELECT id, customer_name, customer_email, status, sentiment, created_at, updated_at
        FROM sessions WHERE id = $1`,
       [id],
     );
@@ -159,7 +167,7 @@ export function sessionsRouter(): express.Router {
       `UPDATE sessions
        SET status = 'closed', sentiment = $2, updated_at = CURRENT_TIMESTAMP
        WHERE id = $1 AND status = 'open'
-       RETURNING id, customer_name, status, sentiment, created_at, updated_at`,
+       RETURNING id, customer_name, customer_email, status, sentiment, created_at, updated_at`,
       [id, sentiment],
     );
 
@@ -182,6 +190,7 @@ export function sessionsRouter(): express.Router {
       triggerType: "onSessionClosed",
       sessionId: session.id,
       customerName: session.customer_name,
+      customerEmail: session.customer_email,
       sentiment: session.sentiment as "happy" | "neutral" | "angry",
       createdAt: session.created_at.toISOString(),
     }).catch((err) =>

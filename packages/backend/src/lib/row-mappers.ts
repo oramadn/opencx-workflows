@@ -1,6 +1,7 @@
 export type SessionRow = {
   id: string;
   customer_name: string;
+  customer_email: string;
   status: string;
   sentiment: string | null;
   created_at: Date;
@@ -19,6 +20,7 @@ export function sessionToJson(row: SessionRow) {
   return {
     id: row.id,
     customerName: row.customer_name,
+    customerEmail: row.customer_email,
     status: row.status,
     sentiment: row.sentiment,
     createdAt: row.created_at.toISOString(),

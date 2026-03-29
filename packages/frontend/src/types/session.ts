@@ -7,6 +7,7 @@ export type Sentiment = "happy" | "neutral" | "angry";
 export type SessionSummary = {
   id: string;
   customerName: string;
+  customerEmail: string;
   status: SessionStatus;
   sentiment: string | null;
   createdAt: string;

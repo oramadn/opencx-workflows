@@ -74,7 +74,7 @@ Layer-style scopes are only reasonable for **purely local** changes, e.g. bumpin
 * **Code Generation:** When generating code for the AI prompt builder, ensure the output is deterministic. Emphasize returning structured JSON containing the trigger event and the raw JS code string.
 
 ## Database Schema Reference (Core)
-* `sessions`: `id` (UUID, default `uuid_generate_v4()`), `customer_name`, `status` (default `'open'`), `sentiment` (nullable; set on close), `created_at`, `updated_at` (timestamptz)
+* `sessions`: `id` (UUID, default `uuid_generate_v4()`), `customer_name`, `customer_email` (NOT NULL), `status` (default `'open'`), `sentiment` (nullable; set on close), `created_at`, `updated_at` (timestamptz)
 * `workflows`: `id` (UUID), `name`, `trigger_events` (TEXT[], default `'{}'`), `original_prompt`, `generated_code`, `is_active` (default true), `created_at`, `updated_at` (timestamptz)
 * `session_messages`: `id` (UUID), `session_id` (FK → `sessions`), `author_role` (`customer` \| `agent`), `body`, `created_at` (timestamptz)
 * **Workflow DevKit (Postgres world):** additional tables/schemas created by `pnpm workflow:postgres-setup` (not in Docker `init/` SQL); includes **graphile-worker** schema for jobs

@@ -18,16 +18,18 @@ export async function listSessions(): Promise<SessionSummary[]> {
 }
 
 export async function createSession(
-  customerName?: string,
+  customerName: string,
+  customerEmail: string,
 ): Promise<SessionSummary> {
   const res = await fetch("/api/sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(
-      customerName ? { customerName } : {},
-    ),
+    body: JSON.stringify({ customerName, customerEmail }),
   });
-  if (!res.ok) throw new Error("Failed to create session");
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? "Failed to create session");
+  }
   return parseJson<SessionSummary>(res);
 }
 

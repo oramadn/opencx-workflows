@@ -65,8 +65,8 @@ Current event types:
 
 | Event | Key properties |
 |-------|----------------|
-| `SessionClosedEvent` | `triggerType`, `sessionId`, `customerName`, `sentiment`, `createdAt` |
-| `SessionOpenedEvent` | `triggerType`, `sessionId`, `customerName`, `createdAt` |
+| `SessionClosedEvent` | `triggerType`, `sessionId`, `customerName`, `customerEmail`, `sentiment`, `createdAt` |
+| `SessionOpenedEvent` | `triggerType`, `sessionId`, `customerName`, `customerEmail`, `createdAt` |
 
 The `triggerType` field is the discriminant for the union type `WorkflowEvent`.
 
@@ -110,7 +110,7 @@ interface QueryOptions {
 
 | Tool | Returns | Queryable fields |
 |------|---------|------------------|
-| `tools.getSessions(options?)` | `SessionResult[]` | `id`, `customerName`, `status`, `sentiment`, `createdAt`, `updatedAt` |
+| `tools.getSessions(options?)` | `SessionResult[]` | `id`, `customerName`, `customerEmail`, `status`, `sentiment`, `createdAt`, `updatedAt` |
 | `tools.getMessages(options?)` | `MessageResult[]` | `id`, `sessionId`, `authorRole`, `body`, `createdAt` |
 
 ### Action tools

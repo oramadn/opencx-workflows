@@ -17,6 +17,7 @@ export function createMockTools(): WorkflowTools {
         {
           id: "00000000-0000-0000-0000-000000000001",
           customerName: "Alice Mock",
+          customerEmail: "alice@example.com",
           status: "closed",
           sentiment: "angry",
           createdAt: new Date().toISOString(),
@@ -25,6 +26,7 @@ export function createMockTools(): WorkflowTools {
         {
           id: "00000000-0000-0000-0000-000000000002",
           customerName: "Bob Mock",
+          customerEmail: "bob@example.com",
           status: "open",
           sentiment: null,
           createdAt: new Date().toISOString(),

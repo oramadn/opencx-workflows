@@ -5,6 +5,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     customer_name VARCHAR(255) NOT NULL,
+    customer_email VARCHAR(255) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'open', -- 'open' or 'closed'
     sentiment VARCHAR(50), -- 'happy', 'neutral', 'angry' (populated on close)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
