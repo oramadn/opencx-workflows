@@ -48,6 +48,8 @@ Edit `packages/backend/.env` if your Postgres URL or ports differ. Variables:
 | `WORKFLOW_TARGET_WORLD` | Set to `@workflow/world-postgres` when using Workflow DevKit |
 | `WORKFLOW_POSTGRES_URL` | Workflow / queue DB (defaults to `DATABASE_URL` if unset) |
 | `E2B_API_KEY` | **When workflow execution is implemented:** [E2B](https://e2b.dev/) API key (Hobby tier includes credits). See [docs/workflow-builder.md](docs/workflow-builder.md). |
+| `RESEND_API_KEY` | [Resend](https://resend.com/) API key for the `sendEmail` workflow tool. Without it, `sendEmail` falls back to a console.log stub. |
+| `RESEND_FROM_EMAIL` | Sender address for workflow emails (defaults to `onboarding@resend.dev`, Resend's built-in test sender). |
 
 ### 4. Workflow DevKit schema (Postgres world)
 

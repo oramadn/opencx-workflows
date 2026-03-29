@@ -28,7 +28,15 @@ export async function runWorkflowInSandbox(
     await sbx.files.write("workflow.mjs", code);
 
     const result = await sbx.commands.run("node workflow-harness.mjs", {
-      envs: { WORKFLOW_EVENT_JSON: JSON.stringify(event) },
+      envs: {
+        WORKFLOW_EVENT_JSON: JSON.stringify(event),
+        ...(process.env.RESEND_API_KEY && {
+          RESEND_API_KEY: process.env.RESEND_API_KEY,
+        }),
+        ...(process.env.RESEND_FROM_EMAIL && {
+          RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
+        }),
+      },
       timeoutMs: COMMAND_TIMEOUT_MS,
     });
 
