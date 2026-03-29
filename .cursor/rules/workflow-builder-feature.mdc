@@ -5,6 +5,8 @@ globs:
   - packages/backend/src/services/llm-generation.ts
   - packages/backend/src/services/mock-tools.ts
   - packages/backend/src/services/query-builder.ts
+  - packages/backend/src/services/workflow-e2b-runner.ts
+  - packages/backend/src/sandbox/workflow-harness.mjs
   - packages/backend/src/routes/workflows.ts
   - packages/frontend/src/pages/workflow-builder-page.tsx
   - packages/frontend/src/pages/workflows-list-page.tsx
@@ -19,6 +21,6 @@ alwaysApply: false
 
 Full reference: **[docs/workflow-builder.md](docs/workflow-builder.md)** (SDK contracts, LLM pipeline, query builder, builder UI, data model, API, Phase 3 roadmap).
 
-Summary: user prompts generate sandboxed JavaScript via OpenAI. SDK types in `workflow-sdk.ts` are injected into the LLM system prompt as compiler instructions. Generic `QueryOptions` pattern powers data tools (`getSessions`, `getMessages`). Workflows subscribe to multiple triggers via `trigger_events TEXT[]`. Builder UI is a split-pane (prompt panel + shiki code viewer). Mock tools ready for `rivet-dev/sandbox-agent` injection.
+Summary: user prompts generate sandboxed JavaScript via OpenAI. SDK types in `workflow-sdk.ts` are injected into the LLM system prompt as compiler instructions. Generic `QueryOptions` pattern powers data tools (`getSessions`, `getMessages`). Workflows subscribe to multiple triggers via `trigger_events TEXT[]`. Builder UI is a split-pane (prompt panel + shiki code viewer). Execution: **E2B** sandboxes; a trusted **workflow harness** builds stub `tools` and invokes `run(event, tools)` — see `docs/workflow-builder.md`.
 
 Consider these rules if they affect your changes.

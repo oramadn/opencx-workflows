@@ -7,6 +7,7 @@ import {
   PromptPanel,
   type PromptEntry,
 } from "@/components/workflow/prompt-panel";
+import { RunTestPanel } from "@/components/workflow/run-test-panel";
 import type { WorkflowDetail } from "@/types/workflow";
 
 export function WorkflowBuilderPage() {
@@ -89,6 +90,12 @@ export function WorkflowBuilderPage() {
           <div className="border-t border-border bg-destructive/10 px-4 py-2 text-sm text-destructive">
             {error}
           </div>
+        )}
+        {workflow && (
+          <RunTestPanel
+            workflowId={workflow.id}
+            triggerEvents={workflow.triggerEvents}
+          />
         )}
       </div>
     </div>

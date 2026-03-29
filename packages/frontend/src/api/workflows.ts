@@ -1,5 +1,6 @@
 import type {
   GenerateRequest,
+  RunTestResult,
   WorkflowDetail,
   WorkflowSummary,
 } from "@/types/workflow";
@@ -34,4 +35,20 @@ export async function generateWorkflow(
     throw new Error(err.error ?? "Generation failed");
   }
   return parseJson<WorkflowDetail>(res);
+}
+
+export async function runWorkflowTest(
+  workflowId: string,
+  event: Record<string, unknown>,
+): Promise<RunTestResult> {
+  const res = await fetch(`/api/workflows/${workflowId}/run-test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(event),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? "Test run failed");
+  }
+  return parseJson<RunTestResult>(res);
 }

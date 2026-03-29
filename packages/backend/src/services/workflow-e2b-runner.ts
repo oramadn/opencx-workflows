@@ -1,0 +1,43 @@
+import fs from "node:fs";
+import path from "node:path";
+import { Sandbox } from "e2b";
+import type { WorkflowEvent } from "../workflow-sdk.js";
+
+const harnessSource = fs.readFileSync(
+  path.join(import.meta.dirname, "../sandbox/workflow-harness.mjs"),
+  "utf-8",
+);
+
+const SANDBOX_TIMEOUT_MS = 30_000;
+const COMMAND_TIMEOUT_MS = 15_000;
+
+export interface RunResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
+export async function runWorkflowInSandbox(
+  code: string,
+  event: WorkflowEvent,
+): Promise<RunResult> {
+  const sbx = await Sandbox.create({ timeoutMs: SANDBOX_TIMEOUT_MS });
+
+  try {
+    await sbx.files.write("workflow-harness.mjs", harnessSource);
+    await sbx.files.write("workflow.mjs", code);
+
+    const result = await sbx.commands.run("node workflow-harness.mjs", {
+      envs: { WORKFLOW_EVENT_JSON: JSON.stringify(event) },
+      timeoutMs: COMMAND_TIMEOUT_MS,
+    });
+
+    return {
+      exitCode: result.exitCode,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    };
+  } finally {
+    await sbx.kill().catch(() => {});
+  }
+}

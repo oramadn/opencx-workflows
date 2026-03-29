@@ -14,7 +14,7 @@ The system has two distinct lifecycles:
 * **Durable workflows (planned):** [Workflow DevKit](https://useworkflow.dev/) — packages **`workflow`** and **`@workflow/world-postgres`** in `@workflows/backend`. Uses the **Postgres world**: durable state in PostgreSQL and **graphile-worker** (pulled in by the world package) for the job queue. Configure `WORKFLOW_TARGET_WORLD=@workflow/world-postgres` and `WORKFLOW_POSTGRES_URL` (or rely on `DATABASE_URL`). **Not wired into Express yet** — call `getWorld().start?.()` on server boot when ready (see upstream docs). Idempotent DB migration: `pnpm workflow:postgres-setup` (requires DB URL in env). **Do not use the Vercel-hosted workflow runtime** for this prototype; self-hosted Postgres world only.
 * **Linting:** ESLint 9 (flat config `eslint.config.mjs`) with `@eslint/js` recommended, `typescript-eslint` recommended, React + React Hooks recommended — run `pnpm lint` from repo root
 * **Database:** PostgreSQL 16+ via Docker (`postgres:alpine`), database `workflows`, user `postgres`, password `password`, host port `5432`
-* **Sandboxing:** `rivet-dev/sandbox-agent` (for secure execution of AI-generated code)—**not wired up yet**
+* **Sandboxing:** **[E2B](https://e2b.dev/)** cloud sandboxes (`e2b` npm package) for secure execution of AI-generated workflow code. A trusted **workflow harness** runs inside the sandbox, builds stub `tools`, and invokes the LLM-generated `run(event, tools)`. See [docs/workflow-builder.md](docs/workflow-builder.md).
 
 ## Repository Layout (implemented)
 * **Root:** `package.json` with convenience scripts; `docker-compose.yml`; `pnpm-workspace.yaml`
@@ -41,7 +41,7 @@ The system has two distinct lifecycles:
 ## Core Architectural Rules & Constraints
 * **NO Vercel-hosted infrastructure:** Do not rely on Vercel-managed services (e.g., Vercel KV, Vercel Functions, **Vercel Workflows cloud runtime**). The prototype runs **locally** and uses **self-hosted** Workflow DevKit with **`@workflow/world-postgres`** — not the Vercel “world” for serverless.
 * **Durable execution:** Implement durable workflow runs via Workflow DevKit + Postgres world (queue + persistence). **Do not** execute generated workflow user code synchronously on the HTTP request thread; keep long-running work in the workflow runtime after it is wired up.
-* **Sandboxed Execution:** AI-generated code must NEVER have direct access to the Node.js host environment, file system, or raw network. It must strictly run inside `rivet-dev/sandbox-agent` and only communicate with the host via explicitly injected, typed functions (the SDK).
+* **Sandboxed Execution:** AI-generated code must NEVER have direct access to the Node.js host environment, file system, or raw network. It runs inside an **E2B** sandbox and interacts with the world only through the **`tools` object** built by a **trusted harness** (stubs now; later host-backed HTTP). See [docs/workflow-builder.md](docs/workflow-builder.md) for the tools bridge design.
 * **Mock App Constraints:** Keep the customer support domain "stupid simple." A session only needs an ID, customer name, status ('open' or 'closed'), and sentiment ('happy', 'neutral', 'angry'). Do not build real AI sentiment analysis; rely on manual UI inputs to mock the sentiment for now.
 
 ## Git commits (Conventional Commits)

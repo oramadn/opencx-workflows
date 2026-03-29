@@ -1,6 +1,9 @@
 import express, { type Request, type Response } from "express";
+import { z } from "zod";
 import { pool } from "../db.js";
 import { generateWorkflow } from "../services/llm-generation.js";
+import { runWorkflowInSandbox } from "../services/workflow-e2b-runner.js";
+import type { WorkflowEvent } from "../workflow-sdk.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -141,6 +144,75 @@ export function workflowsRouter(): express.Router {
     }
 
     res.status(workflowId ? 200 : 201).json(workflowToJson(row));
+  });
+
+  const SessionClosedEventSchema = z.object({
+    triggerType: z.literal("onSessionClosed"),
+    sessionId: z.string().min(1),
+    customerName: z.string().min(1),
+    sentiment: z.enum(["happy", "neutral", "angry"]),
+    createdAt: z.string().min(1),
+  });
+
+  const SessionOpenedEventSchema = z.object({
+    triggerType: z.literal("onSessionOpened"),
+    sessionId: z.string().min(1),
+    customerName: z.string().min(1),
+    createdAt: z.string().min(1),
+  });
+
+  const WorkflowEventSchema = z.discriminatedUnion("triggerType", [
+    SessionClosedEventSchema,
+    SessionOpenedEventSchema,
+  ]);
+
+  r.post("/:id/run-test", async (req: Request, res: Response) => {
+    const id = req.params.id as string | undefined;
+    if (!id || !isUuid(id)) {
+      res.status(400).json({ error: "Invalid workflow id" });
+      return;
+    }
+
+    const { rows, rowCount } = await pool.query<WorkflowRow>(
+      `SELECT generated_code, trigger_events FROM workflows WHERE id = $1`,
+      [id],
+    );
+    if (rowCount === 0) {
+      res.status(404).json({ error: "Workflow not found" });
+      return;
+    }
+
+    const parsed = WorkflowEventSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Invalid event payload",
+        details: parsed.error.issues,
+      });
+      return;
+    }
+
+    const event = parsed.data as WorkflowEvent;
+    const workflow = rows[0]!;
+
+    if (!workflow.trigger_events.includes(event.triggerType)) {
+      res.status(400).json({
+        error: `Workflow does not subscribe to trigger "${event.triggerType}". Subscribed: ${workflow.trigger_events.join(", ")}`,
+      });
+      return;
+    }
+
+    try {
+      const result = await runWorkflowInSandbox(
+        workflow.generated_code,
+        event,
+      );
+      res.json(result);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Sandbox execution failed";
+      console.error("Workflow run-test error:", err);
+      res.status(502).json({ error: message });
+    }
   });
 
   return r;

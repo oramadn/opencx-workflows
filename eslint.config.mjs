@@ -12,6 +12,7 @@ export default tseslint.config(
       '**/.pnpm-store/**',
       '**/coverage/**',
       '**/*.tsbuildinfo',
+      'packages/backend/src/sandbox/**',
     ],
   },
   eslint.configs.recommended,

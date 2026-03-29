@@ -47,6 +47,7 @@ Edit `packages/backend/.env` if your Postgres URL or ports differ. Variables:
 | `OPENAI_API_KEY` | **Required** for the workflow builder's LLM generation pipeline (get one from [platform.openai.com](https://platform.openai.com/api-keys)) |
 | `WORKFLOW_TARGET_WORLD` | Set to `@workflow/world-postgres` when using Workflow DevKit |
 | `WORKFLOW_POSTGRES_URL` | Workflow / queue DB (defaults to `DATABASE_URL` if unset) |
+| `E2B_API_KEY` | **When workflow execution is implemented:** [E2B](https://e2b.dev/) API key (Hobby tier includes credits). See [docs/workflow-builder.md](docs/workflow-builder.md). |
 
 ### 4. Workflow DevKit schema (Postgres world)
 

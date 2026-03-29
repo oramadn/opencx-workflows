@@ -16,3 +16,9 @@ export interface GenerateRequest {
   prompt: string;
   workflowId?: string;
 }
+
+export interface RunTestResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
