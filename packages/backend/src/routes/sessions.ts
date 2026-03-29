@@ -1,0 +1,203 @@
+import express, { type Request, type Response } from "express";
+import { pool } from "../db.js";
+
+const MAX_BODY_LEN = 10_000;
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(s: string): boolean {
+  return UUID_RE.test(s);
+}
+
+type SessionRow = {
+  id: string;
+  customer_name: string;
+  status: string;
+  sentiment: string | null;
+  created_at: Date;
+  updated_at: Date;
+};
+
+type MessageRow = {
+  id: string;
+  session_id: string;
+  author_role: string;
+  body: string;
+  created_at: Date;
+};
+
+function sessionToJson(row: SessionRow) {
+  return {
+    id: row.id,
+    customerName: row.customer_name,
+    status: row.status,
+    sentiment: row.sentiment,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+  };
+}
+
+function messageToJson(row: MessageRow) {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    authorRole: row.author_role,
+    body: row.body,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
+export function sessionsRouter(): express.Router {
+  const r = express.Router();
+
+  r.get("/", async (_req: Request, res: Response) => {
+    const { rows } = await pool.query<SessionRow>(
+      `SELECT id, customer_name, status, sentiment, created_at, updated_at
+       FROM sessions
+       ORDER BY updated_at DESC`,
+    );
+    res.json(rows.map(sessionToJson));
+  });
+
+  r.post("/", async (req: Request, res: Response) => {
+    const raw = req.body?.customerName;
+    const customerName =
+      typeof raw === "string" && raw.trim() !== ""
+        ? raw.trim().slice(0, 255)
+        : "Customer";
+
+    const { rows } = await pool.query<SessionRow>(
+      `INSERT INTO sessions (customer_name)
+       VALUES ($1)
+       RETURNING id, customer_name, status, sentiment, created_at, updated_at`,
+      [customerName],
+    );
+    res.status(201).json(sessionToJson(rows[0]!));
+  });
+
+  r.get("/:id", async (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (!id || !isUuid(id)) {
+      res.status(400).json({ error: "Invalid session id" });
+      return;
+    }
+
+    const sessionResult = await pool.query<SessionRow>(
+      `SELECT id, customer_name, status, sentiment, created_at, updated_at
+       FROM sessions WHERE id = $1`,
+      [id],
+    );
+    if (sessionResult.rowCount === 0) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    const msgResult = await pool.query<MessageRow>(
+      `SELECT id, session_id, author_role, body, created_at
+       FROM session_messages
+       WHERE session_id = $1
+       ORDER BY created_at ASC`,
+      [id],
+    );
+
+    res.json({
+      session: sessionToJson(sessionResult.rows[0]!),
+      messages: msgResult.rows.map(messageToJson),
+    });
+  });
+
+  r.post("/:id/messages", async (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (!id || !isUuid(id)) {
+      res.status(400).json({ error: "Invalid session id" });
+      return;
+    }
+
+    const authorRole = req.body?.authorRole;
+    const bodyRaw = req.body?.body;
+
+    if (authorRole !== "customer" && authorRole !== "agent") {
+      res.status(400).json({ error: "authorRole must be 'customer' or 'agent'" });
+      return;
+    }
+    if (typeof bodyRaw !== "string") {
+      res.status(400).json({ error: "body must be a string" });
+      return;
+    }
+    const body = bodyRaw.trim();
+    if (body.length === 0) {
+      res.status(400).json({ error: "body must not be empty" });
+      return;
+    }
+    if (body.length > MAX_BODY_LEN) {
+      res.status(400).json({ error: `body must be at most ${MAX_BODY_LEN} characters` });
+      return;
+    }
+
+    const sessionResult = await pool.query<{ status: string }>(
+      `SELECT status FROM sessions WHERE id = $1`,
+      [id],
+    );
+    if (sessionResult.rowCount === 0) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    if (sessionResult.rows[0]!.status !== "open") {
+      res.status(409).json({ error: "Session is closed" });
+      return;
+    }
+
+    const { rows } = await pool.query<MessageRow>(
+      `INSERT INTO session_messages (session_id, author_role, body)
+       VALUES ($1, $2, $3)
+       RETURNING id, session_id, author_role, body, created_at`,
+      [id, authorRole, body],
+    );
+    res.status(201).json(messageToJson(rows[0]!));
+  });
+
+  r.patch("/:id/close", async (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (!id || !isUuid(id)) {
+      res.status(400).json({ error: "Invalid session id" });
+      return;
+    }
+
+    const sentiment = req.body?.sentiment;
+    if (
+      sentiment !== "happy" &&
+      sentiment !== "neutral" &&
+      sentiment !== "angry"
+    ) {
+      res
+        .status(400)
+        .json({ error: "sentiment must be 'happy', 'neutral', or 'angry'" });
+      return;
+    }
+
+    const { rows, rowCount } = await pool.query<SessionRow>(
+      `UPDATE sessions
+       SET status = 'closed', sentiment = $2, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND status = 'open'
+       RETURNING id, customer_name, status, sentiment, created_at, updated_at`,
+      [id, sentiment],
+    );
+
+    if (rowCount === 0) {
+      const exists = await pool.query(`SELECT 1 FROM sessions WHERE id = $1`, [
+        id,
+      ]);
+      if (exists.rowCount === 0) {
+        res.status(404).json({ error: "Session not found" });
+        return;
+      }
+      res.status(409).json({ error: "Session is already closed" });
+      return;
+    }
+
+    res.json(sessionToJson(rows[0]!));
+  });
+
+  return r;
+}
