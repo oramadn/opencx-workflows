@@ -1,0 +1,71 @@
+# Project Context: AI-Driven Workflow Builder Prototype
+
+## The Goal
+We are building a prototype for a customer support system feature called "Workflows." This feature allows support agents to prompt an AI to generate executable code that automates tasks based on session events (e.g., "Send a Slack message when an angry session closes"). 
+
+The system has two distinct lifecycles:
+1.  **Creation:** An AI agent (LLM) takes a user prompt and a strictly typed SDK (Triggers and Actions) to generate sandboxed JavaScript code.
+2.  **Execution:** Core application events trigger durable background jobs that execute the AI-generated code inside a secure, isolated sandbox environment.
+
+## Tech Stack & Tooling
+* **Monorepo:** pnpm workspaces (`pnpm-workspace.yaml` → `packages/*`)
+* **Frontend:** React 19, TypeScript, Vite 6, Tailwind CSS v4 (`@tailwindcss/vite`), package `@workflows/frontend` in `packages/frontend/`
+* **Backend:** Node.js, TypeScript, Express — package `@workflows/backend` in `packages/backend/`
+* **Worker / queue:** Graphile Worker, package `@workflows/worker` in `packages/worker/` (migrations + long-running `run()` with task handlers under `src/tasks/`)
+* **Database:** PostgreSQL 16+ via Docker (`postgres:alpine`), database `workflows`, user `postgres`, password `password`, host port `5432`
+* **Queue / Durable Execution:** Graphile Worker (PostgreSQL-backed, no Redis); schema lives in `graphile_worker` and is applied via `pnpm worker:migrate` or on worker startup
+* **Sandboxing:** `rivet-dev/sandbox-agent` (for secure execution of AI-generated code)—**not wired up yet**
+
+## Repository Layout (implemented)
+* **Root:** `package.json` with convenience scripts; `docker-compose.yml`; `pnpm-workspace.yaml`
+* **Postgres init DDL:** `docker/postgres/init/*.sql` (e.g. `01-schema.sql`, `02-session-messages.sql`)—mounted into `/docker-entrypoint-initdb.d` (runs only on **first** empty volume). Enables `uuid-ossp`; creates `sessions`, `workflows`, `session_messages`, plus partial index `idx_workflows_trigger_event` on active workflows by `trigger_event`
+* **Frontend:** `packages/frontend/`—`pnpm frontend` (dev), `pnpm frontend:build`, `pnpm frontend:preview`
+* **Backend:** `packages/backend/`—`pnpm backend` / `pnpm backend:dev` (default `DATABASE_URL` same as worker)
+* **Worker:** `packages/worker/`—`pnpm worker` / `pnpm worker:dev`, `pnpm worker:migrate`. Default connection string if unset: `postgresql://postgres:password@localhost:5432/workflows` (`DATABASE_URL` overrides)
+
+## Local prerequisites
+* Docker (for Postgres). Start DB: `docker compose up -d` from repo root.
+* Node + **pnpm** only for JS dependencies: `pnpm install` from repo root.
+
+## SQL quick reference (Postgres)
+* Clear rows: `DELETE FROM sessions;` (no `*` after `DELETE`). Truncate: `TRUNCATE sessions;`
+
+## Core Architectural Rules & Constraints
+* **NO Vercel Infrastructure:** Do not use or suggest Vercel-specific features (e.g., Vercel KV, Vercel Functions, Vercel Workflows). The architecture must remain infrastructure-agnostic and run entirely locally for the prototype.
+* **Durable Execution:** All workflow executions must be handled durably via Postgres and Graphile Worker. Do not execute workflows synchronously in the main thread.
+* **Sandboxed Execution:** AI-generated code must NEVER have direct access to the Node.js host environment, file system, or raw network. It must strictly run inside `rivet-dev/sandbox-agent` and only communicate with the host via explicitly injected, typed functions (the SDK).
+* **Mock App Constraints:** Keep the customer support domain "stupid simple." A session only needs an ID, customer name, status ('open' or 'closed'), and sentiment ('happy', 'neutral', 'angry'). Do not build real AI sentiment analysis; rely on manual UI inputs to mock the sentiment for now.
+
+## Git commits (Conventional Commits)
+
+This repo is **fullstack**: most work spans UI, API, schema, and sometimes the worker. Commits should reflect **what changed for the product or task**, not which package folder you touched.
+
+**Format:** `type(optional-scope): imperative summary` (see [Conventional Commits](https://www.conventionalcommits.org/)).
+
+**Types:** `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, etc.—use what fits.
+
+**Scopes — do this**
+
+* Name the **feature, capability, or ticket**, e.g. `feat(inbox): add session list polling`, `fix(sessions): reject messages on closed session`, `feat(workflows): scaffold builder route`.
+* Omit the scope when it is obvious or the change is repo-wide: `chore: update pnpm lockfile`.
+* Use a **ticket id** as scope when your team tracks that way: `feat(ACME-42): close session sentiment modal`.
+
+**Scopes — avoid as the default pattern**
+
+* Do **not** use stack-layer scopes such as `feat(backend)`, `feat(frontend)`, or `fix(worker)` for product work. A single user-facing change often belongs in **one commit** that updates API, UI, and SQL together; splitting by layer creates noisy history and mismatches how tickets are delivered.
+
+Layer-style scopes are only reasonable for **purely local** changes, e.g. bumping a devDependency that only affects one package, or a mechanical rename inside one app with no behavioral coupling—still prefer a concrete scope (`chore(vite): bump to 6.x`) over a vague `frontend` when you can.
+
+**Subject line:** present tense, imperative, ~72 characters, no trailing period.
+
+## Coding Standards
+* **Language:** Strict TypeScript for both frontend and backend.
+* **Package Management:** Strictly use `pnpm`. Do not suggest `npm` or `yarn` commands.
+* **Styling:** Use Tailwind CSS for all frontend components. Keep the UI clean but minimal—focus on functionality over complex design.
+* **Code Generation:** When generating code for the AI prompt builder, ensure the output is deterministic. Emphasize returning structured JSON containing the trigger event and the raw JS code string.
+
+## Database Schema Reference (Core)
+* `sessions`: `id` (UUID, default `uuid_generate_v4()`), `customer_name`, `status` (default `'open'`), `sentiment` (nullable; set on close), `created_at`, `updated_at` (timestamptz)
+* `workflows`: `id` (UUID), `name`, `trigger_event`, `original_prompt`, `generated_code`, `is_active` (default true), `created_at`, `updated_at` (timestamptz)
+* `session_messages`: `id` (UUID), `session_id` (FK → `sessions`), `author_role` (`customer` \| `agent`), `body`, `created_at` (timestamptz)
+* **Graphile Worker:** separate `graphile_worker` schema (managed by the library; not in `01-schema.sql`)
