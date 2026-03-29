@@ -12,6 +12,7 @@ The system has two distinct lifecycles:
 * **Frontend:** React 19, TypeScript, Vite 6, Tailwind CSS v4 (`@tailwindcss/vite`), package `@workflows/frontend` in `packages/frontend/`
 * **Backend:** Node.js, TypeScript, Express — package `@workflows/backend` in `packages/backend/`
 * **Worker / queue:** Graphile Worker, package `@workflows/worker` in `packages/worker/` (migrations + long-running `run()` with task handlers under `src/tasks/`)
+* **Linting:** ESLint 9 (flat config `eslint.config.mjs`) with `@eslint/js` recommended, `typescript-eslint` recommended, React + React Hooks recommended — run `pnpm lint` from repo root
 * **Database:** PostgreSQL 16+ via Docker (`postgres:alpine`), database `workflows`, user `postgres`, password `password`, host port `5432`
 * **Queue / Durable Execution:** Graphile Worker (PostgreSQL-backed, no Redis); schema lives in `graphile_worker` and is applied via `pnpm worker:migrate` or on worker startup
 * **Sandboxing:** `rivet-dev/sandbox-agent` (for secure execution of AI-generated code)—**not wired up yet**
@@ -63,6 +64,7 @@ Layer-style scopes are only reasonable for **purely local** changes, e.g. bumpin
 
 ## Coding Standards
 * **Language:** Strict TypeScript for both frontend and backend.
+* **Linting:** After any substantive code change (new or edited TS/TSX), run `pnpm lint` from the repo root and fix reported issues before considering the work complete. Prefer fixing the code over disabling rules unless the rule is a false positive or clearly incompatible with the intended pattern.
 * **Package Management:** Strictly use `pnpm`. Do not suggest `npm` or `yarn` commands.
 * **Styling:** Use Tailwind CSS for all frontend components. Keep the UI clean but minimal—focus on functionality over complex design.
 * **Code Generation:** When generating code for the AI prompt builder, ensure the output is deterministic. Emphasize returning structured JSON containing the trigger event and the raw JS code string.

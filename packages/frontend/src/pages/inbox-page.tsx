@@ -62,22 +62,22 @@ export function InboxPage() {
   }, []);
 
   useEffect(() => {
-    void refreshList();
-    const t = setInterval(() => void refreshList(), POLL_MS);
+    const run = () => void refreshList();
+    queueMicrotask(run);
+    const t = setInterval(run, POLL_MS);
     return () => clearInterval(t);
   }, [refreshList]);
 
   useEffect(() => {
-    if (!selectedId) {
-      setDetail(null);
-      return;
-    }
-    void refreshDetail(selectedId);
-    const t = setInterval(() => void refreshDetail(selectedId), POLL_MS);
+    if (!selectedId) return;
+    const run = () => void refreshDetail(selectedId);
+    queueMicrotask(run);
+    const t = setInterval(run, POLL_MS);
     return () => clearInterval(t);
   }, [selectedId, refreshDetail]);
 
-  const session = detail?.session;
+  const viewDetail = selectedId ? detail : null;
+  const session = viewDetail?.session;
   const isOpen = session?.status === "open";
 
   const handleNewSession = async () => {
@@ -208,7 +208,7 @@ export function InboxPage() {
 
             <ScrollArea className="min-h-0 flex-1">
               <div className="flex flex-col gap-3 p-4">
-                {detail?.messages.length === 0 && (
+                {viewDetail?.messages.length === 0 && (
                   <Card className="border-dashed">
                     <CardContent className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
                       <MessageSquarePlus className="size-8 opacity-50" />
@@ -216,7 +216,7 @@ export function InboxPage() {
                     </CardContent>
                   </Card>
                 )}
-                {detail?.messages.map((m) => {
+                {viewDetail?.messages.map((m) => {
                   const isCustomer = m.authorRole === "customer";
                   return (
                     <div
