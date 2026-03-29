@@ -1,0 +1,19 @@
+---
+description: Sessions inbox prototype — read docs/inbox.md for schema, REST API, UI behavior, and runbook when editing inbox, session APIs, or session_messages.
+globs:
+  - packages/frontend/src/pages/inbox-page.tsx
+  - packages/frontend/src/api/sessions.ts
+  - packages/frontend/src/components/close-session-modal.tsx
+  - packages/frontend/src/components/app-shell.tsx
+  - packages/frontend/src/components/nav-rail.tsx
+  - packages/backend/src/routes/sessions.ts
+  - packages/backend/src/index.ts
+  - docker/postgres/init/02-session-messages.sql
+alwaysApply: false
+---
+
+# Inbox feature context
+
+Full reference: **[docs/inbox.md](docs/inbox.md)** (product behavior, layout, DB, REST, run, non-goals).
+
+Summary: one user plays customer + agent; messages in `session_messages`; close sets `sessions.sentiment` manually; UI at `/inbox`; API under `/api/sessions` on port 3001; Vite proxies `/api` in dev.

@@ -23,6 +23,9 @@ The system has two distinct lifecycles:
 * **Backend:** `packages/backend/`—`pnpm backend` / `pnpm backend:dev` (default `DATABASE_URL` same as worker)
 * **Worker:** `packages/worker/`—`pnpm worker` / `pnpm worker:dev`, `pnpm worker:migrate`. Default connection string if unset: `postgresql://postgres:password@localhost:5432/workflows` (`DATABASE_URL` overrides)
 
+## Feature documentation
+* **Inbox (sessions prototype):** [docs/inbox.md](docs/inbox.md) — product behavior, data model, REST API, frontend layout, local run, and intentional non-goals. Cursor applies [.cursor/rules/inbox-feature.mdc](.cursor/rules/inbox-feature.mdc) when editing inbox-related paths (see file for globs).
+
 ## Local prerequisites
 * Docker (for Postgres). Start DB: `docker compose up -d` from repo root.
 * Node + **pnpm** only for JS dependencies: `pnpm install` from repo root.
