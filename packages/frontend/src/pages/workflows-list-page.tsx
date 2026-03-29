@@ -2,7 +2,7 @@ import { Layers, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { listWorkflows } from "@/api/workflows";
+import { listWorkflows, setWorkflowActive } from "@/api/workflows";
 import { Button } from "@/components/ui/button";
 import type { WorkflowSummary } from "@/types/workflow";
 
@@ -81,10 +81,31 @@ export function WorkflowsListPage() {
                     </span>
                   </div>
                 </div>
-                <span
-                  className={`ml-3 inline-block size-2 rounded-full ${w.isActive ? "bg-green-500" : "bg-muted-foreground/30"}`}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={w.isActive}
                   title={w.isActive ? "Active" : "Inactive"}
-                />
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setWorkflowActive(w.id, !w.isActive)
+                      .then((updated) =>
+                        setWorkflows((prev) =>
+                          prev.map((p) =>
+                            p.id === updated.id
+                              ? { ...p, isActive: updated.isActive }
+                              : p,
+                          ),
+                        ),
+                      )
+                      .catch(() => {});
+                  }}
+                  className={`relative ml-3 inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${w.isActive ? "bg-green-500" : "bg-muted-foreground/30"}`}
+                >
+                  <span
+                    className={`inline-block size-3.5 rounded-full bg-white shadow transition-transform ${w.isActive ? "translate-x-[18px]" : "translate-x-[3px]"}`}
+                  />
+                </button>
               </Link>
             ))}
           </div>

@@ -166,6 +166,36 @@ export function workflowsRouter(): express.Router {
     SessionOpenedEventSchema,
   ]);
 
+  r.patch("/:id/active", async (req: Request, res: Response) => {
+    const id = req.params.id as string | undefined;
+    if (!id || !isUuid(id)) {
+      res.status(400).json({ error: "Invalid workflow id" });
+      return;
+    }
+
+    const { isActive } = req.body ?? {};
+    if (typeof isActive !== "boolean") {
+      res.status(400).json({ error: "isActive must be a boolean" });
+      return;
+    }
+
+    const { rows, rowCount } = await pool.query<WorkflowRow>(
+      `UPDATE workflows
+       SET is_active = $2, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING id, name, trigger_events, original_prompt, generated_code,
+                 is_active, created_at, updated_at`,
+      [id, isActive],
+    );
+
+    if (rowCount === 0) {
+      res.status(404).json({ error: "Workflow not found" });
+      return;
+    }
+
+    res.json(workflowToJson(rows[0]!));
+  });
+
   r.post("/:id/run-test", async (req: Request, res: Response) => {
     const id = req.params.id as string | undefined;
     if (!id || !isUuid(id)) {

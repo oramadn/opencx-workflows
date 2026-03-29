@@ -53,9 +53,11 @@ interface CodeViewerProps {
   code: string;
   triggerEvents: string[];
   loading?: boolean;
+  isActive?: boolean;
+  onToggleActive?: (active: boolean) => void;
 }
 
-export function CodeViewer({ code, triggerEvents, loading }: CodeViewerProps) {
+export function CodeViewer({ code, triggerEvents, loading, isActive, onToggleActive }: CodeViewerProps) {
   const highlighter = useHighlighter();
   const containerRef = useRef<HTMLDivElement>(null);
   const [displayCode, setDisplayCode] = useState("");
@@ -89,20 +91,36 @@ export function CodeViewer({ code, triggerEvents, loading }: CodeViewerProps) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-        <span className="text-sm font-medium text-foreground">
-          Generated Code
-        </span>
-        <div className="flex gap-1.5">
-          {triggerEvents.map((t) => (
-            <span
-              key={t}
-              className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
-            >
-              {t}
-            </span>
-          ))}
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-foreground">
+            Generated Code
+          </span>
+          <div className="flex gap-1.5">
+            {triggerEvents.map((t) => (
+              <span
+                key={t}
+                className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
+              >
+                {t}
+              </span>
+            ))}
+          </div>
         </div>
+        {onToggleActive !== undefined && isActive !== undefined && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isActive}
+            onClick={() => onToggleActive(!isActive)}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${isActive ? "bg-green-500" : "bg-muted-foreground/30"}`}
+          >
+            <span
+              className={`inline-block size-3.5 rounded-full bg-white shadow transition-transform ${isActive ? "translate-x-[18px]" : "translate-x-[3px]"}`}
+            />
+            <span className="sr-only">{isActive ? "Active" : "Inactive"}</span>
+          </button>
+        )}
       </div>
 
       <div className="relative min-h-0 flex-1 overflow-auto bg-[#22272e]">

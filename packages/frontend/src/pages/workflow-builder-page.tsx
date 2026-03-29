@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { generateWorkflow, getWorkflow } from "@/api/workflows";
+import { generateWorkflow, getWorkflow, setWorkflowActive } from "@/api/workflows";
 import { CodeViewer } from "@/components/workflow/code-viewer";
 import {
   PromptPanel,
@@ -36,6 +36,19 @@ export function WorkflowBuilderPage() {
       cancelled = true;
     };
   }, [id]);
+
+  const handleToggleActive = useCallback(
+    async (active: boolean) => {
+      if (!workflow) return;
+      try {
+        const updated = await setWorkflowActive(workflow.id, active);
+        setWorkflow(updated);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to update workflow");
+      }
+    },
+    [workflow],
+  );
 
   const handleSubmit = useCallback(
     async (prompt: string) => {
@@ -85,6 +98,8 @@ export function WorkflowBuilderPage() {
           code={workflow?.generatedCode ?? ""}
           triggerEvents={workflow?.triggerEvents ?? []}
           loading={loading}
+          isActive={workflow?.isActive}
+          onToggleActive={workflow ? handleToggleActive : undefined}
         />
         {error && workflow && (
           <div className="border-t border-border bg-destructive/10 px-4 py-2 text-sm text-destructive">

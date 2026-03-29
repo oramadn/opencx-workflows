@@ -37,6 +37,22 @@ export async function generateWorkflow(
   return parseJson<WorkflowDetail>(res);
 }
 
+export async function setWorkflowActive(
+  id: string,
+  isActive: boolean,
+): Promise<WorkflowDetail> {
+  const res = await fetch(`/api/workflows/${id}/active`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ isActive }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? "Failed to update workflow");
+  }
+  return parseJson<WorkflowDetail>(res);
+}
+
 export async function runWorkflowTest(
   workflowId: string,
   event: Record<string, unknown>,

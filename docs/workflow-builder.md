@@ -283,7 +283,4 @@ The backend loads `.env` via `--env-file=.env` in the `tsx` dev/start scripts.
 
 ## What's not wired up yet (Phase 3)
 
-- **E2B execution:** not integrated yet. Planned: `@e2b/sdk` (or `@e2b/code-interpreter`) from the backend, harness + `workflow.mjs` in the sandbox, then `node` (or `runCode`) for a test/dispatch path. Mock tools + query builder on the host remain the dev defaults until the harness calls the API for real data.
-- **Event dispatch:** no code fires workflows when sessions open/close. The `trigger_events` GIN index and dispatch query pattern are designed for this.
 - **Prompt history persistence:** prompt log is ephemeral. Could add a `prompt_history JSONB` column if needed.
-- **Workflow activation/deactivation:** `is_active` column exists but no UI toggle.
