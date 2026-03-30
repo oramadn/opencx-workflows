@@ -55,3 +55,136 @@ If the project evolves to need any of the following, it's worth revisiting the S
 - **Complex control flow** (loops, sub-workflows, fan-out/fan-in)
 
 The SDK would run on the host as a durable orchestrator, calling into E2B only for sandboxed action execution — similar to our current graph walker, but with the SDK managing state instead of our custom `workflow_runs` table.
+
+---
+
+## What switching to the Workflow SDK would look like
+
+If we decided to adopt the SDK for the full stack, here's what it would require and what we'd get in return.
+
+### What changes
+
+**1. Drop E2B. AI-generated code runs on the host.**
+
+This is the big one. The SDK needs workflow code to be compiled and executed in the same environment as the runtime and Postgres. E2B is incompatible with that model. We'd remove the sandbox boundary entirely and execute AI-generated code directly on our Node.js backend.
+
+**Security mitigation would shift** from process isolation (E2B) to code-level constraints: static analysis of generated code, an allowlist of permitted APIs, and potentially a lightweight in-process sandbox like `vm2` or Node's `--experimental-vm-modules`. None of these are as strong as E2B's full container isolation.
+
+**2. Add a build step to the backend.**
+
+The SDK's `"use workflow"` and `"use step"` directives require a Vite plugin (or equivalent bundler transform) that rewrites the code at compile time. Our backend currently runs with `tsx` (no build). We'd need to:
+
+- Add a Vite or esbuild build pipeline for the backend.
+- Configure the `workflow` Vite plugin.
+- Either pre-compile AI-generated workflow code on save (turning generation into a build+deploy cycle), or compile on-the-fly when a workflow is triggered.
+
+**3. Rewrite the generation pipeline.**
+
+The LLM currently generates a flow graph with per-node code snippets. With the SDK, it would instead generate a single async function that uses SDK primitives:
+
+```typescript
+"use workflow";
+import { sleep } from "workflow";
+
+export default async function run(event, tools) {
+  "use step";
+  const sessions = await tools.getSessions({ where: [{ field: "sentiment", op: "eq", value: "angry" }] });
+
+  "use step";
+  await tools.sendEmail(event.customerEmail, "We're sorry", "Following up on your session...");
+
+  await sleep("5m");
+
+  "use step";
+  await tools.sendSlackChannelMessage("alerts", `Follow-up sent to ${event.customerName}`);
+}
+```
+
+The system prompt, Zod schema, and composition engine would all change. The flow graph visual model could stay (it's UI), but the executable code would be a monolithic function with SDK directives instead of per-node snippets.
+
+**4. Wire up the Workflow SDK runtime.**
+
+- Call `getWorld().start?.()` on server boot (currently documented but not wired).
+- Configure `WORKFLOW_TARGET_WORLD=@workflow/world-postgres` and `WORKFLOW_POSTGRES_URL`.
+- The SDK uses graphile-worker internally for its job queue — our direct graphile-worker usage, the segment executor, and the `workflow_runs` table would all be replaced by the SDK's event log and internal scheduling.
+
+**5. Delete our custom orchestration layer.**
+
+These files/concepts become redundant:
+
+- `workflow_runs` table and `04-workflow-runs.sql`
+- `workflow-segment-executor.ts` (graph walker)
+- `workflow-step-harness.mjs` (per-step E2B harness)
+- `runStepInSandbox()` in `workflow-e2b-runner.ts`
+- The delay-node routing logic in `workflow-dispatcher.ts`
+- Direct graphile-worker initialization in `index.ts`
+
+The `tools` object would move from the E2B harness to a host-side module that the generated code imports or receives as an argument.
+
+### What we gain
+
+| Benefit | Detail |
+|---|---|
+| **Step idempotency** | Every `"use step"` caches its result in the event log. If the process crashes after sending an email, the SDK won't re-send it on replay — it returns the cached result. This is the single biggest reliability improvement. |
+| **Durable sleep as a first-class primitive** | `sleep("5m")` just works. No delay nodes, no graph walker, no manual state checkpointing. The SDK handles persistence, timer scheduling, and replay internally. |
+| **Crash recovery via replay** | If the server restarts mid-workflow, the SDK replays the event log from the beginning, skips all completed steps (returning cached results), and resumes execution exactly where it left off. Our current system resumes from a checkpoint but doesn't replay — subtle state inconsistencies are possible. |
+| **Webhook/hook pausing** | `createHook()` pauses a workflow until an external HTTP callback arrives. This enables "wait until the customer replies" without building custom infrastructure. |
+| **Simpler codebase** | We delete ~400 lines of custom orchestration (segment executor, step harness, run table, dispatcher routing). The SDK replaces all of it with a few directives and a runtime call. |
+| **Observability** | The event log is a complete, queryable audit trail of every step in every workflow run — what ran, what returned, when it slept, when it resumed. |
+
+### What we lose
+
+| Cost | Detail |
+|---|---|
+| **Sandbox isolation** | The most significant loss. AI-generated code runs on our host with access to the Node.js environment. A malicious or buggy workflow could access the filesystem, make arbitrary network requests, or consume unbounded resources. Mitigation exists (static analysis, `vm2`, resource limits) but is weaker than E2B's container boundary. |
+| **Simplicity of the backend** | We add a compile step, a bundler plugin, and the SDK runtime to a backend that currently has none of these. The SDK is beta software (`4.2.0-beta.73`) with its own learning curve and upgrade churn. |
+| **Instant test feedback** | Currently, the test endpoint composes code and runs it immediately in E2B. With the SDK, testing would either need to bypass the directives (mock mode) or run a real durable workflow — which is slower and more complex. |
+| **Flow graph as source of truth** | The SDK model is a single function, not a node graph. The visual flow graph would become a derived view (generated from the code or maintained in parallel), rather than the canonical representation that drives execution. This is a significant UX and architecture shift. |
+
+### Summary
+
+Switching to the Workflow SDK means **trading sandbox security for execution reliability**. The SDK gives us idempotent steps, durable sleep, crash replay, and webhook pausing — things that are genuinely hard to build correctly. But it requires running AI-generated code on the host, which is the one thing our architecture was specifically designed to prevent.
+
+The decision comes down to: **how much do you trust AI-generated code?** If the answer is "enough, with guardrails," the SDK is a strict upgrade in reliability and simplicity. If the answer is "not at all without full isolation," E2B + our custom orchestration is the right tradeoff.
+
+---
+
+## How does Vercel run AI-generated workflows without sandboxing?
+
+Vercel doesn't skip sandboxing — they just don't need E2B because their platform already provides three layers of protection that we don't have.
+
+### 1. The code runs in the user's account, not the platform's
+
+When Vercel's AI generates a workflow, it gets deployed as a serverless function in *that user's* Vercel project. If the generated code does something destructive — leaks env vars, makes expensive API calls, infinite loops — it damages the **user's own resources**, not Vercel's infrastructure or other customers. The blast radius is scoped to the person who asked for it.
+
+In our case, the generated code runs on **our backend server**. A bad workflow could read our filesystem, access our database, exhaust our memory, or interfere with other users' workflows. The blast radius is our entire system. That's why we need E2B.
+
+### 2. Vercel already has platform-level isolation
+
+Vercel Functions run in either **V8 isolates** (Edge Runtime — same technology as Cloudflare Workers) or **containerized Node.js processes** (Node runtime). Both provide:
+
+- Memory isolation between functions (one function can't read another's state)
+- No filesystem persistence (ephemeral, like E2B)
+- Enforced timeouts and memory limits (function gets killed if it exceeds them)
+- Limited API surface on Edge Runtime (no `fs`, no `child_process`, no raw sockets)
+
+This isn't as strong as a full container sandbox, but it's sufficient because of point 1 — the worst case is "user's own function misbehaves in user's own project."
+
+### 3. Human-in-the-loop before deployment
+
+Vercel's workflow builder shows the user the generated code and lets them review/edit it before deploying. There's a deliberate step between "AI generated this" and "this is running in production." The user has agency to catch problems.
+
+Our system is more automated — a trigger fires, the dispatcher finds matching workflows, and generated code executes immediately. There's no human review at execution time (though there is at creation time in the builder UI).
+
+### The fundamental difference is where the trust boundary sits
+
+| | Vercel | Us |
+|---|---|---|
+| **Who owns the compute?** | The user paying for Vercel | Us (our server) |
+| **Who suffers if code is bad?** | The user who deployed it | Us and all our users |
+| **Platform isolation?** | V8 isolates / serverless containers (built-in) | Plain Node.js process (none without E2B) |
+| **Review before execution?** | Yes — deploy cycle with code preview | No — auto-dispatched on trigger |
+
+Vercel can afford to run AI-generated code without E2B because the code is **isolated by their platform** and **scoped to the user's own account**. We can't, because the code would run in our shared backend process with access to everything.
+
+That's the core reason E2B exists in our stack — and why the Workflow SDK, which assumes your code is trusted, doesn't naturally fit.
