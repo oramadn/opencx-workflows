@@ -98,7 +98,7 @@ Product and API details: **[docs/inbox.md](docs/inbox.md)**.
 |--------|------|---------|
 | `GET` | `/api/workflows` | List all workflows |
 | `GET` | `/api/workflows/:id` | Get a single workflow (includes generated code) |
-| `POST` | `/api/workflows/generate` | Generate or refine a workflow via LLM (`{ prompt, workflowId? }`) |
+| `POST` | `/api/workflows/generate` | Generate or refine a workflow via LLM (`{ prompt, workflowId? }`). Returns `422` if the prompt requires unsupported triggers or tools. |
 
 ## Root scripts (reference)
 

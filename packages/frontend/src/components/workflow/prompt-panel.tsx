@@ -6,8 +6,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 
 export interface PromptEntry {
-  role: "user";
+  role: "user" | "assistant";
   content: string;
+  unsupportedCapabilities?: string[];
 }
 
 interface PromptPanelProps {
@@ -51,14 +52,31 @@ export function PromptPanel({ history, loading, onSubmit }: PromptPanelProps) {
               alerts channel with the customer name.&rdquo;
             </p>
           )}
-          {history.map((entry, i) => (
-            <div
-              key={i}
-              className="rounded-lg bg-accent/50 px-3 py-2 text-sm text-foreground"
-            >
-              {entry.content}
-            </div>
-          ))}
+          {history.map((entry, i) =>
+            entry.role === "user" ? (
+              <div
+                key={i}
+                className="rounded-lg bg-accent/50 px-3 py-2 text-sm text-foreground"
+              >
+                {entry.content}
+              </div>
+            ) : (
+              <div
+                key={i}
+                className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-foreground"
+              >
+                <p>{entry.content}</p>
+                {entry.unsupportedCapabilities &&
+                  entry.unsupportedCapabilities.length > 0 && (
+                    <ul className="mt-1.5 list-disc pl-5 text-xs text-muted-foreground">
+                      {entry.unsupportedCapabilities.map((cap) => (
+                        <li key={cap}>{cap}</li>
+                      ))}
+                    </ul>
+                  )}
+              </div>
+            ),
+          )}
           {loading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <svg

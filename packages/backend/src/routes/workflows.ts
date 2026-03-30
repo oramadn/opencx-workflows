@@ -103,9 +103,9 @@ export function workflowsRouter(): express.Router {
       existingCode = existing.rows[0]!.generated_code;
     }
 
-    let result;
+    let outcome;
     try {
-      result = await generateWorkflow({
+      outcome = await generateWorkflow({
         prompt,
         existingTriggerEvents,
         existingCode,
@@ -115,6 +115,14 @@ export function workflowsRouter(): express.Router {
         err instanceof Error ? err.message : "Generation failed";
       console.error("Workflow generation error:", err);
       res.status(502).json({ error: message });
+      return;
+    }
+
+    if (outcome.status === "rejected") {
+      res.status(422).json({
+        error: outcome.reason,
+        unsupportedCapabilities: outcome.unsupported ?? [],
+      });
       return;
     }
 
@@ -129,7 +137,7 @@ export function workflowsRouter(): express.Router {
          WHERE id = $1
          RETURNING id, name, trigger_events, original_prompt, generated_code,
                    is_active, created_at, updated_at`,
-        [workflowId, result.trigger_events, result.code, prompt],
+        [workflowId, outcome.trigger_events, outcome.code, prompt],
       );
       row = rows[0]!;
     } else {
@@ -138,7 +146,7 @@ export function workflowsRouter(): express.Router {
          VALUES ($1, $2, $3, $4)
          RETURNING id, name, trigger_events, original_prompt, generated_code,
                    is_active, created_at, updated_at`,
-        [name, result.trigger_events, prompt, result.code],
+        [name, outcome.trigger_events, prompt, outcome.code],
       );
       row = rows[0]!;
     }

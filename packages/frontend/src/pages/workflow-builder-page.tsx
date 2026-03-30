@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { generateWorkflow, getWorkflow, setWorkflowActive } from "@/api/workflows";
+import {
+  WorkflowRejectedError,
+  generateWorkflow,
+  getWorkflow,
+  setWorkflowActive,
+} from "@/api/workflows";
 import { CodeViewer } from "@/components/workflow/code-viewer";
 import {
   PromptPanel,
@@ -67,7 +72,18 @@ export function WorkflowBuilderPage() {
           navigate(`/workflows/${result.id}`, { replace: true });
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Generation failed");
+        if (err instanceof WorkflowRejectedError) {
+          setHistory((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content: err.message,
+              unsupportedCapabilities: err.unsupportedCapabilities,
+            },
+          ]);
+        } else {
+          setError(err instanceof Error ? err.message : "Generation failed");
+        }
       } finally {
         setLoading(false);
       }

@@ -181,18 +181,21 @@ Base path: **`/api/workflows`** (JSON). Backend: `packages/backend/src/routes/wo
 |--------|------|------|-------|
 | `GET` | `/api/workflows` | -- | List all workflows, newest first |
 | `GET` | `/api/workflows/:id` | -- | Full workflow record including `generatedCode` |
-| `POST` | `/api/workflows/generate` | `{ prompt, workflowId? }` | Generate new or refine existing workflow |
+| `POST` | `/api/workflows/generate` | `{ prompt, workflowId? }` | Generate new or refine existing workflow. Returns `422` with `{ error, unsupportedCapabilities }` if the prompt requires triggers or tools that do not exist in the SDK. |
 | `POST` | `/api/workflows/:id/run-test` | `WorkflowEvent` (JSON) | Execute workflow in E2B sandbox with a sample event. Returns `{ exitCode, stdout, stderr }`. |
 
 ### POST /generate flow
 
 1. Validate `prompt` (required, non-empty string).
 2. If `workflowId` provided, fetch existing `trigger_events` and `generated_code` from DB (404 if not found).
-3. Build system prompt: role/constraints + raw `workflow-sdk.ts` source + optional existing state.
+3. Build system prompt: role/constraints + raw `workflow-sdk.ts` source + optional existing state. The prompt explicitly lists allowed triggers (`VALID_TRIGGERS`) and tool methods (`VALID_TOOL_METHODS`) and instructs the LLM to return a `status: "rejected"` response for unsupported capabilities instead of inventing triggers or tools.
 4. Call OpenAI `gpt-4o` with `response_format: json_object`, temperature `0.2`.
-5. Validate LLM output with Zod (`trigger_events: string[]`, `code: string`).
-6. INSERT (new) or UPDATE (existing) the `workflows` row.
-7. Return the full workflow record.
+5. Parse LLM output with a Zod discriminated union on `status`:
+   - `"ok"` — `trigger_events: string[]`, `code: string`. A post-parse guard also scans `code` for `tools.<method>` calls not in `VALID_TOOL_METHODS` (defense against hallucinations).
+   - `"rejected"` — `reason: string`, optional `unsupported: string[]`.
+6. If rejected (by LLM or by post-parse guard): return `422` with `{ error: string, unsupportedCapabilities: string[] }`. No DB write.
+7. INSERT (new) or UPDATE (existing) the `workflows` row.
+8. Return the full workflow record.
 
 On generation error, returns `502` with `{ error: string }`.
 
@@ -212,6 +215,7 @@ On generation error, returns `502` with `{ error: string }`.
 - OpenAI client is lazily initialized (backend starts fine without a valid API key; errors surface only on generation).
 - System prompt switches between "create" and "update" mode based on whether existing state is provided.
 - In update mode, the LLM is told to preserve existing logic unless the user explicitly asks to change it.
+- The system prompt enumerates the exact allowed triggers and tool methods. If the user's request requires anything else, the LLM must return `{ "status": "rejected", "reason": "...", "unsupported": [...] }` instead of generating code.
 
 ## Query builder
 
@@ -288,3 +292,4 @@ The backend loads `.env` via `--env-file=.env` in the `tsx` dev/start scripts.
 - **Sleep / delay support:** Verify that long-running `sleep`-style delays work correctly inside durable workflows (e.g. "wait 5 minutes then send a follow-up email").
 - **React Flow workflow canvas:** Revamp the workflow builder interface using [React Flow](https://reactflow.dev/) to give users a visual node-based graph for triggers, conditions, and actions.
 - **Expandable side navigation:** Improve the `NavRail` to expand on hover or add a toggle arrow so labels are visible without taking permanent horizontal space.
+- **Add code review step to ensure nothing malicious or expensive is running**

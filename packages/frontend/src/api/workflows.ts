@@ -9,6 +9,16 @@ async function parseJson<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
+export class WorkflowRejectedError extends Error {
+  unsupportedCapabilities: string[];
+
+  constructor(message: string, unsupportedCapabilities: string[] = []) {
+    super(message);
+    this.name = "WorkflowRejectedError";
+    this.unsupportedCapabilities = unsupportedCapabilities;
+  }
+}
+
 export async function listWorkflows(): Promise<WorkflowSummary[]> {
   const res = await fetch("/api/workflows");
   if (!res.ok) throw new Error("Failed to load workflows");
@@ -31,7 +41,16 @@ export async function generateWorkflow(
     body: JSON.stringify(req),
   });
   if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    const err = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      unsupportedCapabilities?: string[];
+    };
+    if (res.status === 422) {
+      throw new WorkflowRejectedError(
+        err.error ?? "This request requires capabilities that are not yet supported.",
+        err.unsupportedCapabilities ?? [],
+      );
+    }
     throw new Error(err.error ?? "Generation failed");
   }
   return parseJson<WorkflowDetail>(res);

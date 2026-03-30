@@ -32,6 +32,14 @@ export type WorkflowEvent = SessionClosedEvent | SessionOpenedEvent;
 export const VALID_TRIGGERS = ["onSessionClosed", "onSessionOpened"] as const;
 export type TriggerType = (typeof VALID_TRIGGERS)[number];
 
+export const VALID_TOOL_METHODS = [
+  "getSessions",
+  "getMessages",
+  "sendEmail",
+  "sendSlackChannelMessage",
+] as const;
+export type ToolMethod = (typeof VALID_TOOL_METHODS)[number];
+
 // ---------------------------------------------------------------------------
 // Generic query primitives — reusable across every domain noun
 // ---------------------------------------------------------------------------

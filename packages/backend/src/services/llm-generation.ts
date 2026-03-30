@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import OpenAI from "openai";
 import { z } from "zod";
-import { VALID_TRIGGERS } from "../workflow-sdk.js";
+import { VALID_TOOL_METHODS, VALID_TRIGGERS } from "../workflow-sdk.js";
 
 const sdkSource = fs.readFileSync(
   path.join(import.meta.dirname, "../workflow-sdk.ts"),
@@ -15,35 +15,89 @@ function getClient(): OpenAI {
   return _openai;
 }
 
-const GenerationResultSchema = z.object({
+// ---------------------------------------------------------------------------
+// Discriminated LLM response schemas
+// ---------------------------------------------------------------------------
+
+const GeneratedSchema = z.object({
+  status: z.literal("ok"),
   trigger_events: z
     .array(z.enum(VALID_TRIGGERS))
     .min(1, "At least one trigger event is required"),
   code: z.string().min(1, "Generated code must not be empty"),
 });
 
-export type GenerationResult = z.infer<typeof GenerationResultSchema>;
+const RejectedSchema = z.object({
+  status: z.literal("rejected"),
+  reason: z.string().min(1, "Rejection reason must not be empty"),
+  unsupported: z.array(z.string()).optional(),
+});
 
-interface GenerateOptions {
+const GenerationOutcomeSchema = z.discriminatedUnion("status", [
+  GeneratedSchema,
+  RejectedSchema,
+]);
+
+export type GenerationOutcome = z.infer<typeof GenerationOutcomeSchema>;
+
+export interface GenerateOptions {
   prompt: string;
   existingTriggerEvents?: string[];
   existingCode?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Post-parse guard: ensure generated code only calls known tools methods
+// ---------------------------------------------------------------------------
+
+const TOOLS_CALL_RE = /tools\.(\w+)\s*\(/g;
+const toolMethodSet = new Set<string>(VALID_TOOL_METHODS);
+
+export function findUnknownToolCalls(code: string): string[] {
+  const unknown: string[] = [];
+  for (const match of code.matchAll(TOOLS_CALL_RE)) {
+    const method = match[1]!;
+    if (!toolMethodSet.has(method) && !unknown.includes(method)) {
+      unknown.push(method);
+    }
+  }
+  return unknown;
+}
+
+// ---------------------------------------------------------------------------
+// System prompt
+// ---------------------------------------------------------------------------
+
 function buildSystemPrompt(
   existing?: { triggerEvents: string[]; code: string },
 ): string {
   let prompt = `You are a workflow code generator for a customer support system.
-Your ONLY job is to produce a JSON object with exactly two keys:
-  1. "trigger_events" — an array of one or more trigger names from: ${VALID_TRIGGERS.join(", ")}
-  2. "code" — a JavaScript string containing the full workflow function
 
-The generated code MUST:
+CAPABILITIES — these are the ONLY triggers and tools available:
+  Triggers: ${VALID_TRIGGERS.join(", ")}
+  Tools: ${VALID_TOOL_METHODS.join(", ")}
+
+Your response MUST be a single JSON object with a "status" key that is either "ok" or "rejected".
+
+If the user's request CAN be fully implemented with the triggers and tools above, respond with:
+  { "status": "ok", "trigger_events": [...], "code": "..." }
+where:
+  - "trigger_events" is an array of one or more trigger names from the list above.
+  - "code" is a JavaScript string containing the full workflow function.
+
+If the user's request REQUIRES any trigger, action, or integration that is NOT in the lists above (e.g. message-level triggers, WhatsApp, SMS, webhooks, or any tool not listed), you MUST respond with:
+  { "status": "rejected", "reason": "...", "unsupported": ["..."] }
+where:
+  - "reason" is a brief, user-friendly explanation of what cannot be fulfilled and why.
+  - "unsupported" is an array of short labels for the missing capabilities (e.g. "trigger:onMessageSent", "action:sendWhatsApp").
+Do NOT invent triggers or tools. Do NOT generate code that calls methods not in the tools list. If even one part of the request is unsupported, reject the entire request.
+
+When generating code (status "ok"), the code MUST:
 - Export a default async function with this exact signature:
     export default async function run(event, tools) { ... }
 - Use ONLY the \`event\` argument (a WorkflowEvent) and the \`tools\` argument (WorkflowTools) provided below.
 - Contain condition-checking logic based on \`event\` properties (e.g. event.triggerType, event.sentiment).
-- Call data-fetching tools (tools.getSessions, tools.getMessages) and action tools (tools.sendEmail, tools.sendSlackChannelMessage) as needed.
+- Call ONLY tools from the list above: ${VALID_TOOL_METHODS.map((m) => `tools.${m}`).join(", ")}.
 
 The generated code MUST NEVER:
 - Use require(), import, dynamic import(), fetch(), eval(), Function(), or setTimeout/setInterval.
@@ -73,15 +127,20 @@ ${existing.code}
 
 Modify this code to fulfill the user's new request.
 Retain any existing logic unless the user explicitly asks to remove or change it.
-If the user's request implies additional triggers, add them to the trigger_events array.`;
+If the user's request implies additional triggers, add them to the trigger_events array.
+If the new request introduces unsupported capabilities, reject it — do NOT silently ignore the unsupported parts.`;
   }
 
   return prompt;
 }
 
+// ---------------------------------------------------------------------------
+// Main generation function
+// ---------------------------------------------------------------------------
+
 export async function generateWorkflow(
   options: GenerateOptions,
-): Promise<GenerationResult> {
+): Promise<GenerationOutcome> {
   const existing =
     options.existingCode && options.existingTriggerEvents
       ? {
@@ -114,5 +173,18 @@ export async function generateWorkflow(
     throw new Error(`LLM returned invalid JSON: ${content.slice(0, 200)}`);
   }
 
-  return GenerationResultSchema.parse(parsed);
+  const outcome = GenerationOutcomeSchema.parse(parsed);
+
+  if (outcome.status === "ok") {
+    const unknownMethods = findUnknownToolCalls(outcome.code);
+    if (unknownMethods.length > 0) {
+      return {
+        status: "rejected",
+        reason: `The generated code references tools that are not available: ${unknownMethods.map((m) => `tools.${m}`).join(", ")}. Please rephrase your request using only the supported capabilities.`,
+        unsupported: unknownMethods.map((m) => `action:${m}`),
+      };
+    }
+  }
+
+  return outcome;
 }
