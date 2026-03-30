@@ -284,3 +284,7 @@ The backend loads `.env` via `--env-file=.env` in the `tsx` dev/start scripts.
 ## What's not wired up yet (Phase 3)
 
 - **Prompt history persistence:** prompt log is ephemeral. Could add a `prompt_history JSONB` column if needed.
+- **Durable workflow execution:** Introduce [Workflow DevKit](https://useworkflow.dev/) (`@workflow/world-postgres`) for durable functions so workflow runs survive restarts and support retries.
+- **Sleep / delay support:** Verify that long-running `sleep`-style delays work correctly inside durable workflows (e.g. "wait 5 minutes then send a follow-up email").
+- **React Flow workflow canvas:** Revamp the workflow builder interface using [React Flow](https://reactflow.dev/) to give users a visual node-based graph for triggers, conditions, and actions.
+- **Expandable side navigation:** Improve the `NavRail` to expand on hover or add a toggle arrow so labels are visible without taking permanent horizontal space.
