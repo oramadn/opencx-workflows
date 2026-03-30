@@ -4,6 +4,7 @@ import { EditorView, basicSetup } from "codemirror";
 import { Code, GitBranch, Play, Save, Zap } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { formatWorkflowCode } from "@/lib/format-workflow-code";
 import type { FlowNodeDescriptor } from "@/types/workflow";
 
 interface NodeCodePanelProps {
@@ -90,15 +91,29 @@ function CodeMirrorEditor({
 }
 
 export function NodeCodePanel({ node, onSave, saving, error }: NodeCodePanelProps) {
-  const [localCode, setLocalCode] = useState(node?.code ?? "");
+  const rawCode = node?.code ?? "";
+  const [formattedCode, setFormattedCode] = useState<string | null>(null);
+  const [localCode, setLocalCode] = useState(rawCode);
   const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    formatWorkflowCode(rawCode).then((result) => {
+      if (cancelled) return;
+      setFormattedCode(result);
+      setLocalCode(result);
+    });
+    return () => { cancelled = true; };
+  }, [rawCode]);
+
+  const baseCode = formattedCode ?? rawCode;
 
   const handleChange = useCallback(
     (value: string) => {
       setLocalCode(value);
-      setDirty(value !== (node?.code ?? ""));
+      setDirty(value !== baseCode);
     },
-    [node?.code],
+    [baseCode],
   );
 
   const handleSave = useCallback(() => {
@@ -151,7 +166,7 @@ export function NodeCodePanel({ node, onSave, saving, error }: NodeCodePanelProp
         <div className="min-h-0 flex-1 overflow-hidden">
           <CodeMirrorEditor
             key={node.id}
-            initialCode={node.code ?? ""}
+            initialCode={baseCode}
             onChange={handleChange}
           />
         </div>

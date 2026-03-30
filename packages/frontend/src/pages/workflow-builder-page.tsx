@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -28,6 +28,32 @@ export function WorkflowBuilderPage() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [savingCode, setSavingCode] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
+
+  const PANEL_MIN = 280;
+  const PANEL_MAX = 900;
+  const PANEL_DEFAULT = 384;
+  const [panelWidth, setPanelWidth] = useState(PANEL_DEFAULT);
+  const dragging = useRef(false);
+
+  useEffect(() => {
+    function onMouseMove(e: MouseEvent) {
+      if (!dragging.current) return;
+      const newWidth = Math.min(PANEL_MAX, Math.max(PANEL_MIN, window.innerWidth - e.clientX));
+      setPanelWidth(newWidth);
+    }
+    function onMouseUp() {
+      if (!dragging.current) return;
+      dragging.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -161,8 +187,21 @@ export function WorkflowBuilderPage() {
         />
       </div>
 
-      {/* Right panel — node code inspector */}
-      <div className="hidden w-96 shrink-0 border-l border-border lg:block">
+      {/* Right panel — node code inspector (resizable) */}
+      <div
+        className="relative hidden shrink-0 border-l border-border lg:block"
+        style={{ width: panelWidth }}
+      >
+        {/* Drag handle */}
+        <div
+          className="absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize hover:bg-primary/20 active:bg-primary/30"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            dragging.current = true;
+            document.body.style.cursor = "col-resize";
+            document.body.style.userSelect = "none";
+          }}
+        />
         <NodeCodePanel
           key={`${selectedNode?.id ?? ""}:${selectedNode?.code ?? ""}`}
           node={selectedNode}
