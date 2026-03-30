@@ -31,8 +31,9 @@ export function WorkflowBuilderPage() {
 
   const PANEL_MIN = 280;
   const PANEL_MAX = 900;
-  const PANEL_DEFAULT = 384;
-  const [panelWidth, setPanelWidth] = useState(PANEL_DEFAULT);
+  const [panelWidth, setPanelWidth] = useState(() =>
+    Math.min(PANEL_MAX, Math.max(PANEL_MIN, Math.round(window.innerWidth / 3))),
+  );
   const dragging = useRef(false);
 
   useEffect(() => {
