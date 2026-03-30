@@ -24,7 +24,7 @@ pnpm install
 docker compose up -d
 ```
 
-Default database: **`workflows`**, user **`postgres`**, password **`password`**, port **`5432`**.
+Default database: **`workflows`**, user **`postgres`**, password **`12345`**, port **`5432`**.
 
 On the **first** start with an **empty** data volume, scripts in `docker/postgres/init/` run automatically (`01-schema.sql`, `02-session-messages.sql`, `03-flow-graph.sql`, `04-workflow-runs.sql`). If you already had an old volume or the init SQL changed, reset data:
 
@@ -71,7 +71,7 @@ Workflow runtime is **not** started by Express yet; this step only prepares the 
 If you have an existing Docker volume (i.e. the `04-workflow-runs.sql` init script didn't run), apply the migration manually:
 
 ```bash
-psql postgresql://postgres:password@localhost:5432/workflows -f docker/postgres/init/04-workflow-runs.sql
+psql postgresql://postgres:12345@localhost:5432/workflows -f docker/postgres/init/04-workflow-runs.sql
 ```
 
 The DDL uses `CREATE TABLE IF NOT EXISTS` so it is safe to re-run.
@@ -129,6 +129,13 @@ Product and API details: **[docs/inbox.md](docs/inbox.md)**.
 
 ## Troubleshooting
 
+- **`docker-credential-desktop` executable file not found in PATH:** Docker Desktop registers a credential helper in `~/.docker/config.json` (`credsStore` / `credHelpers`). Your terminal must be able to run that helper, or pulls fail before the image downloads.
+  - **Fix A (recommended):** Put Docker’s CLI helpers on your `PATH`. On macOS with Docker Desktop, add this to `~/.zshrc` (or run it once in the terminal before `docker compose up`):
+
+    `export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"`
+
+    Restart the terminal or `source ~/.zshrc`, then try again. In Docker Desktop, ensure **Settings → Advanced → CLI tools** (or similar) is enabled so these binaries exist.
+  - **Fix B:** For **public** images only (e.g. `postgres:alpine`), you can clear the store so Docker does not call the helper: edit `~/.docker/config.json` and set `"credsStore": ""` (or remove the `credsStore` key). This is fine for local dev; use Fix A if you rely on private registries.
 - **Port 5432 in use:** change the host mapping in `docker-compose.yml` (e.g. `5433:5432`) and update `DATABASE_URL` / `WORKFLOW_POSTGRES_URL`.
 - **Backend cannot connect:** ensure `docker compose ps` shows Postgres healthy and `packages/backend/.env` matches.
 - **CORS:** backend allows `http://localhost:5173` and `http://127.0.0.1:5173` in dev.

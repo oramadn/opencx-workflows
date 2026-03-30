@@ -9,7 +9,7 @@ import { segmentTaskList } from "./services/workflow-segment-executor.js";
 const PORT = Number(process.env.PORT ?? 3001);
 const connectionString =
   process.env.DATABASE_URL ??
-  "postgresql://postgres:password@localhost:5432/workflows";
+  "postgresql://postgres:12345@localhost:5432/workflows";
 
 const app = express();
 app.use(

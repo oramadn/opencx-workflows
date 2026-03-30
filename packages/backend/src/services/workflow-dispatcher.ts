@@ -5,7 +5,7 @@ import { runWorkflowInSandbox } from "./workflow-e2b-runner.js";
 
 const connectionString =
   process.env.DATABASE_URL ??
-  "postgresql://postgres:password@localhost:5432/workflows";
+  "postgresql://postgres:12345@localhost:5432/workflows";
 
 let _workerUtils: WorkerUtils | null = null;
 async function getWorkerUtils(): Promise<WorkerUtils> {

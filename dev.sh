@@ -30,7 +30,7 @@ tmux send-keys -t "$SESSION:ngrok" "pkill -f 'ngrok http' 2>/dev/null; sleep 1; 
 
 # 6: psql
 tmux new-window -t "$SESSION" -n psql -c "$ROOT"
-tmux send-keys -t "$SESSION:psql" "psql postgresql://postgres:password@localhost:5432/workflows" Enter
+tmux send-keys -t "$SESSION:psql" "psql postgresql://postgres:12345@localhost:5432/workflows" Enter
 
 tmux select-window -t "$SESSION:shell"
 exec tmux attach -t "$SESSION"
