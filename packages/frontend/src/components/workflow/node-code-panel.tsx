@@ -1,11 +1,13 @@
 import { javascript } from "@codemirror/lang-javascript";
+import { type Diagnostic, linter } from "@codemirror/lint";
 import { oneDark } from "@codemirror/theme-one-dark";
+import * as acorn from "acorn";
 import { EditorView, basicSetup } from "codemirror";
 import { Code, GitBranch, Play, Save, Zap } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { formatWorkflowCode } from "@/lib/format-workflow-code";
-import type { FlowNodeDescriptor } from "@/types/workflow";
+import type { FlowNodeDescriptor, FlowNodeType } from "@/types/workflow";
 
 interface NodeCodePanelProps {
   node: FlowNodeDescriptor | null;
@@ -45,11 +47,67 @@ const typeBadge: Record<string, { label: string; color: string; icon: typeof Zap
   condition: { label: "Condition", color: "bg-amber-500/20 text-amber-400", icon: GitBranch },
 };
 
+function createStepLinter(nodeType: FlowNodeType) {
+  return linter((view) => {
+    const code = view.state.doc.toString();
+    const trimmed = code.trim();
+    if (trimmed.length === 0) return [];
+
+    const wrapper =
+      nodeType === "condition"
+        ? `(async () => { if (\n${trimmed}\n) {} })()`
+        : `(async () => {\n${trimmed}\n})()`;
+
+    const prefixLines = 1;
+
+    try {
+      acorn.parse(wrapper, { ecmaVersion: 2022, sourceType: "module" });
+      return [];
+    } catch (err: unknown) {
+      if (!(err instanceof SyntaxError)) return [];
+
+      const acornErr = err as SyntaxError & {
+        loc?: { line: number; column: number };
+        pos?: number;
+        raisedAt?: number;
+      };
+
+      const rawMsg = acornErr.message.replace(/\s*\(\d+:\d+\)$/, "");
+
+      let from = code.length;
+      let to = from;
+
+      if (acornErr.loc) {
+        const adjustedLine = acornErr.loc.line - prefixLines;
+        if (adjustedLine >= 1) {
+          let offset = 0;
+          const lines = code.split("\n");
+          for (let i = 0; i < adjustedLine - 1 && i < lines.length; i++) {
+            offset += lines[i]!.length + 1;
+          }
+          from = Math.min(offset + acornErr.loc.column, code.length);
+          to = Math.min(from + 1, code.length);
+        }
+      }
+
+      const diagnostic: Diagnostic = {
+        from,
+        to,
+        severity: "error",
+        message: rawMsg,
+      };
+      return [diagnostic];
+    }
+  });
+}
+
 function CodeMirrorEditor({
   initialCode,
+  nodeType,
   onChange,
 }: {
   initialCode: string;
+  nodeType: FlowNodeType;
   onChange: (value: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -68,6 +126,7 @@ function CodeMirrorEditor({
         basicSetup,
         javascript(),
         oneDark,
+        createStepLinter(nodeType),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             onChangeRef.current(update.state.doc.toString());
@@ -85,7 +144,7 @@ function CodeMirrorEditor({
     return () => {
       view.destroy();
     };
-  }, [initialCode]);
+  }, [initialCode, nodeType]);
 
   return <div ref={containerRef} className="h-full" />;
 }
@@ -167,6 +226,7 @@ export function NodeCodePanel({ node, onSave, saving, error }: NodeCodePanelProp
           <CodeMirrorEditor
             key={node.id}
             initialCode={baseCode}
+            nodeType={node.type}
             onChange={handleChange}
           />
         </div>

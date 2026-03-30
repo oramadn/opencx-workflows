@@ -6,6 +6,7 @@ import {
   findUnknownToolCalls,
   generateWorkflow,
 } from "../services/llm-generation.js";
+import { validateStepCode } from "../services/validate-step-code.js";
 import { runWorkflowInSandbox } from "../services/workflow-e2b-runner.js";
 import type { FlowGraph, WorkflowEvent } from "../workflow-sdk.js";
 
@@ -294,6 +295,16 @@ export function workflowsRouter(): express.Router {
     }
     if (node.type === "trigger") {
       res.status(422).json({ error: "Trigger nodes do not have editable code" });
+      return;
+    }
+
+    const syntax = validateStepCode(code, node.type as "action" | "condition");
+    if (!syntax.valid) {
+      res.status(422).json({
+        error: `Syntax error: ${syntax.message}`,
+        line: syntax.line,
+        column: syntax.column,
+      });
       return;
     }
 
