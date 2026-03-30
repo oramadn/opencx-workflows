@@ -1,4 +1,4 @@
-import { ArrowUp, Loader2 } from "lucide-react";
+import { ArrowUp, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -19,12 +19,15 @@ interface ChatBarProps {
 export function ChatBar({ history, loading, onSubmit }: ChatBarProps) {
   const [value, setValue] = useState("");
   const [isFocused, setIsFocused] = useState(false);
+  const [historyCollapsed, setHistoryCollapsed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [history.length, loading]);
+    if (!historyCollapsed) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [history.length, loading, historyCollapsed]);
 
   function handleSubmit() {
     const trimmed = value.trim();
@@ -61,6 +64,7 @@ export function ChatBar({ history, loading, onSubmit }: ChatBarProps) {
 
   const hasHistory = history.length > 0 || loading;
   const isExpanded = isFocused || value.trim().length > 0;
+  const showHistory = isExpanded && hasHistory && !historyCollapsed;
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-4 pb-4">
@@ -68,8 +72,28 @@ export function ChatBar({ history, loading, onSubmit }: ChatBarProps) {
         className="pointer-events-auto flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-background/95 shadow-lg backdrop-blur-sm transition-all"
         style={{ maxHeight: isExpanded && hasHistory ? "20rem" : undefined }}
       >
-        {/* Message history — only visible when focused/expanded and has content */}
+        {/* History toggle */}
         {isExpanded && hasHistory && (
+          <button
+            type="button"
+            onClick={() => setHistoryCollapsed((c) => !c)}
+            className="flex items-center justify-center gap-1 border-b border-border px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+          >
+            {historyCollapsed ? (
+              <>
+                <ChevronUp className="size-3" />
+                Show history ({history.length})
+              </>
+            ) : (
+              <>
+                <ChevronDown className="size-3" />
+                Hide history
+              </>
+            )}
+          </button>
+        )}
+
+        {showHistory && (
           <ScrollArea className="max-h-40 border-b border-border">
             <div className="flex flex-col gap-2 px-4 pt-3 pb-2">
               {history.map((entry, i) =>
