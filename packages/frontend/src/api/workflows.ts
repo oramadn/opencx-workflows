@@ -88,6 +88,26 @@ export async function renameWorkflow(
   return parseJson<WorkflowDetail>(res);
 }
 
+export async function updateNodeCode(
+  workflowId: string,
+  nodeId: string,
+  code: string,
+): Promise<WorkflowDetail> {
+  const res = await fetch(
+    `/api/workflows/${workflowId}/nodes/${encodeURIComponent(nodeId)}/code`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    },
+  );
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? "Failed to update node code");
+  }
+  return parseJson<WorkflowDetail>(res);
+}
+
 export async function runWorkflowTest(
   workflowId: string,
   event: Record<string, unknown>,

@@ -130,6 +130,7 @@ export interface FlowNodeDescriptor {
   id: string;
   type: FlowNodeType;
   label: string;
+  code?: string;
   metadata?: Record<string, unknown>;
 }
 

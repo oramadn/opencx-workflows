@@ -37,10 +37,23 @@ function EmptyState({ loading }: { loading: boolean }) {
 interface WorkflowCanvasProps {
   flowGraph: FlowGraph | null;
   loading?: boolean;
+  selectedNodeId?: string | null;
+  onNodeClick?: (nodeId: string) => void;
 }
 
-function CanvasInner({ flowGraph, loading }: WorkflowCanvasProps) {
-  const { nodes, edges } = useAutoLayout(flowGraph);
+function CanvasInner({
+  flowGraph,
+  loading,
+  selectedNodeId,
+  onNodeClick,
+}: WorkflowCanvasProps) {
+  const { nodes: layoutNodes, edges } = useAutoLayout(flowGraph);
+
+  const nodes = layoutNodes.map((n) => ({
+    ...n,
+    selected: n.id === selectedNodeId,
+    data: { ...n.data, selected: n.id === selectedNodeId },
+  }));
 
   if (nodes.length === 0) {
     return <EmptyState loading={loading ?? false} />;
@@ -55,7 +68,8 @@ function CanvasInner({ flowGraph, loading }: WorkflowCanvasProps) {
       fitViewOptions={{ padding: 0.3 }}
       nodesDraggable={false}
       nodesConnectable={false}
-      elementsSelectable={false}
+      elementsSelectable
+      onNodeClick={(_event, node) => onNodeClick?.(node.id)}
       proOptions={{ hideAttribution: true }}
       className="bg-background"
     >

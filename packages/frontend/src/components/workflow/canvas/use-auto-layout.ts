@@ -38,7 +38,7 @@ export function useAutoLayout(flowGraph: FlowGraph | null): {
           x: (pos?.x ?? 0) - NODE_WIDTH / 2,
           y: (pos?.y ?? 0) - NODE_HEIGHT / 2,
         },
-        data: { label: n.label, metadata: n.metadata },
+        data: { label: n.label, code: n.code, metadata: n.metadata },
         sourcePosition: Position.Bottom,
         targetPosition: Position.Top,
       };

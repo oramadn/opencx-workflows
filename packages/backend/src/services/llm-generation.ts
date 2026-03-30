@@ -24,6 +24,7 @@ const FlowNodeSchema = z.object({
   id: z.string().min(1),
   type: z.enum(["trigger", "condition", "action"]),
   label: z.string().min(1),
+  code: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -33,17 +34,30 @@ const FlowEdgeSchema = z.object({
   label: z.string().optional(),
 });
 
-const FlowGraphSchema = z.object({
-  nodes: z.array(FlowNodeSchema).min(1, "At least one flow node is required"),
-  edges: z.array(FlowEdgeSchema),
-});
+const FlowGraphSchema = z
+  .object({
+    nodes: z
+      .array(FlowNodeSchema)
+      .min(1, "At least one flow node is required"),
+    edges: z.array(FlowEdgeSchema),
+  })
+  .superRefine((graph, ctx) => {
+    for (const node of graph.nodes) {
+      if (node.type !== "trigger" && (!node.code || node.code.trim() === "")) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Non-trigger node "${node.id}" must have a non-empty "code" field`,
+          path: ["nodes"],
+        });
+      }
+    }
+  });
 
 const GeneratedSchema = z.object({
   status: z.literal("ok"),
   trigger_events: z
     .array(z.enum(VALID_TRIGGERS))
     .min(1, "At least one trigger event is required"),
-  code: z.string().min(1, "Generated code must not be empty"),
   flow: FlowGraphSchema,
 });
 
@@ -63,7 +77,6 @@ export type GenerationOutcome = z.infer<typeof GenerationOutcomeSchema>;
 export interface GenerateOptions {
   prompt: string;
   existingTriggerEvents?: string[];
-  existingCode?: string;
   existingFlowGraph?: FlowGraph;
 }
 
@@ -90,7 +103,7 @@ export function findUnknownToolCalls(code: string): string[] {
 // ---------------------------------------------------------------------------
 
 function buildSystemPrompt(
-  existing?: { triggerEvents: string[]; code: string; flowGraph?: FlowGraph },
+  existing?: { triggerEvents: string[]; flowGraph?: FlowGraph },
 ): string {
   let prompt = `You are a workflow code generator for a customer support system.
 
@@ -101,11 +114,10 @@ CAPABILITIES — these are the ONLY triggers and tools available:
 Your response MUST be a single JSON object with a "status" key that is either "ok" or "rejected".
 
 If the user's request CAN be fully implemented with the triggers and tools above, respond with:
-  { "status": "ok", "trigger_events": [...], "code": "...", "flow": { "nodes": [...], "edges": [...] } }
+  { "status": "ok", "trigger_events": [...], "flow": { "nodes": [...], "edges": [...] } }
 where:
   - "trigger_events" is an array of one or more trigger names from the list above.
-  - "code" is a JavaScript string containing the full workflow function.
-  - "flow" is a visual graph descriptor for rendering the workflow as a node diagram.
+  - "flow" is a visual graph descriptor where each non-trigger node carries a "code" field (see below).
 
 If the user's request REQUIRES any trigger, action, or integration that is NOT in the lists above (e.g. message-level triggers, WhatsApp, SMS, webhooks, or any tool not listed), you MUST respond with:
   { "status": "rejected", "reason": "...", "unsupported": ["..."] }
@@ -114,42 +126,51 @@ where:
   - "unsupported" is an array of short labels for the missing capabilities (e.g. "trigger:onMessageSent", "action:sendWhatsApp").
 Do NOT invent triggers or tools. Do NOT generate code that calls methods not in the tools list. If even one part of the request is unsupported, reject the entire request.
 
-When generating code (status "ok"), the code MUST:
-- Export a default async function with this exact signature:
-    export default async function run(event, tools) { ... }
-- Use ONLY the \`event\` argument (a WorkflowEvent) and the \`tools\` argument (WorkflowTools) provided below.
-- Contain condition-checking logic based on \`event\` properties (e.g. event.triggerType, event.sentiment).
-- Call ONLY tools from the list above: ${VALID_TOOL_METHODS.map((m) => `tools.${m}`).join(", ")}.
+STEP-CODE ARCHITECTURE — each flow node carries its own code snippet instead of a monolithic function:
 
-The generated code MUST NEVER:
+  - "trigger" nodes: NO "code" field. Triggers represent event subscriptions, not executable code.
+  - "action" nodes: "code" is the step body — tool calls, data preparation, assignments. This code runs inside an async IIFE with access to \`event\`, \`tools\`, and a shared \`context\` object.
+  - "condition" nodes: "code" is a boolean expression (e.g. \`event.sentiment === 'angry'\`). The runtime wraps it in an if-statement.
+
+INTER-STEP DATA FLOW — the \`context\` convention:
+  Steps share data through a \`context\` object provided by the runtime.
+  - To pass data to a later step, assign it: \`context.messages = await tools.getMessages(...);\`
+  - To read data from an earlier step, reference it: \`context.messages\`
+  - Local variables within a step (declared with const/let) stay scoped to that step.
+  - The \`event\` and \`tools\` objects are available in every step.
+
+Per-step code MUST:
+- Call ONLY tools from the list above: ${VALID_TOOL_METHODS.map((m) => `tools.${m}`).join(", ")}.
+- Use \`context.*\` for any value that a later step needs.
+
+Per-step code MUST NEVER:
 - Use require(), import, dynamic import(), fetch(), eval(), Function(), or setTimeout/setInterval.
 - Access global objects like process, Buffer, __dirname, __filename, or window.
-- Declare variables named "event" or "tools" (they are parameters).
+- Declare variables named "event", "tools", or "context" (they are provided by the runtime).
+- Include the \`export default async function run\` wrapper — the runtime composes that.
 
-FLOW GRAPH — alongside the code, you MUST produce a "flow" object that describes the workflow visually:
+FLOW GRAPH — you MUST produce a "flow" object:
   {
     "nodes": [
-      { "id": "<unique-id>", "type": "<trigger|condition|action>", "label": "<short human-readable label>" }
+      { "id": "<unique-id>", "type": "trigger", "label": "<event name>" },
+      { "id": "<unique-id>", "type": "action", "label": "<short label>", "code": "<step body>" },
+      { "id": "<unique-id>", "type": "condition", "label": "<question?>", "code": "<boolean expression>" }
     ],
     "edges": [
-      { "source": "<node-id>", "target": "<node-id>", "label": "<optional edge label>" }
+      { "source": "<node-id>", "target": "<node-id>", "label": "<optional: Yes/No for conditions>" }
     ]
   }
-
-Node types:
-  - "trigger": One per subscribed trigger event. Label should name the event (e.g. "Session Closed").
-  - "condition": A branching decision point. Label should describe the check (e.g. "Customer is angry?"). Use edge labels "Yes"/"No" for the branches.
-  - "action": A tool call or side effect. Label should describe what happens (e.g. "Send Slack alert", "Fetch recent sessions").
 
 Rules for the flow graph:
   - Every trigger event in "trigger_events" must have a corresponding trigger node.
   - The graph must be a connected DAG starting from trigger node(s).
   - Node IDs must be unique strings (e.g. "trigger-1", "condition-1", "action-1").
-  - The graph should mirror the logical structure of the code — each condition check and tool call should be a node.
+  - Every non-trigger node MUST have a non-empty "code" field.
+  - Condition nodes must have "Yes"/"No" labeled edges to downstream nodes.
   - Keep labels concise (under 40 characters).
 
 Here are the COMPLETE TypeScript type definitions — this is your compiler reference.
-The code you produce must conform to these types exactly:
+The step code you produce must conform to these types exactly:
 
 \`\`\`typescript
 ${sdkSource}
@@ -164,19 +185,14 @@ You are UPDATING an existing workflow. The current configuration is:
 
 Current trigger events: ${JSON.stringify(existing.triggerEvents)}
 
-Current code:
-\`\`\`javascript
-${existing.code}
-\`\`\`
-
-Current flow graph:
+Current flow graph (with per-node step code):
 \`\`\`json
 ${JSON.stringify(existing.flowGraph ?? { nodes: [], edges: [] }, null, 2)}
 \`\`\`
 
-Modify the code and flow graph to fulfill the user's new request.
+Modify the flow graph and per-node code to fulfill the user's new request.
 Retain any existing logic unless the user explicitly asks to remove or change it.
-Keep the flow graph in sync with the code — add, update, or remove nodes/edges to match.
+Keep the flow graph consistent — add, update, or remove nodes/edges to match.
 If the user's request implies additional triggers, add them to the trigger_events array.
 If the new request introduces unsupported capabilities, reject it — do NOT silently ignore the unsupported parts.`;
   }
@@ -192,10 +208,9 @@ export async function generateWorkflow(
   options: GenerateOptions,
 ): Promise<GenerationOutcome> {
   const existing =
-    options.existingCode && options.existingTriggerEvents
+    options.existingTriggerEvents
       ? {
           triggerEvents: options.existingTriggerEvents,
-          code: options.existingCode,
           flowGraph: options.existingFlowGraph,
         }
       : undefined;
@@ -227,12 +242,18 @@ export async function generateWorkflow(
   const outcome = GenerationOutcomeSchema.parse(parsed);
 
   if (outcome.status === "ok") {
-    const unknownMethods = findUnknownToolCalls(outcome.code);
-    if (unknownMethods.length > 0) {
+    const allUnknown: string[] = [];
+    for (const node of outcome.flow.nodes) {
+      if (!node.code) continue;
+      for (const method of findUnknownToolCalls(node.code)) {
+        if (!allUnknown.includes(method)) allUnknown.push(method);
+      }
+    }
+    if (allUnknown.length > 0) {
       return {
         status: "rejected",
-        reason: `The generated code references tools that are not available: ${unknownMethods.map((m) => `tools.${m}`).join(", ")}. Please rephrase your request using only the supported capabilities.`,
-        unsupported: unknownMethods.map((m) => `action:${m}`),
+        reason: `The generated code references tools that are not available: ${allUnknown.map((m) => `tools.${m}`).join(", ")}. Please rephrase your request using only the supported capabilities.`,
+        unsupported: allUnknown.map((m) => `action:${m}`),
       };
     }
   }

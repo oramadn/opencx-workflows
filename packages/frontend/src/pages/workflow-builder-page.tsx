@@ -6,14 +6,16 @@ import {
   generateWorkflow,
   getWorkflow,
   renameWorkflow,
+  updateNodeCode,
 } from "@/api/workflows";
 import { WorkflowCanvas } from "@/components/workflow/canvas/workflow-canvas";
 import {
   ChatBar,
   type PromptEntry,
 } from "@/components/workflow/chat-bar";
+import { NodeCodePanel } from "@/components/workflow/node-code-panel";
 import { WorkflowTitle } from "@/components/workflow/workflow-title";
-import type { WorkflowDetail } from "@/types/workflow";
+import type { FlowNodeDescriptor, WorkflowDetail } from "@/types/workflow";
 
 export function WorkflowBuilderPage() {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +25,9 @@ export function WorkflowBuilderPage() {
   const [history, setHistory] = useState<PromptEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [savingCode, setSavingCode] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -89,6 +94,28 @@ export function WorkflowBuilderPage() {
     [workflow],
   );
 
+  const handleSaveNodeCode = useCallback(
+    async (nodeId: string, code: string) => {
+      if (!workflow) return;
+      setCodeError(null);
+      setSavingCode(true);
+      try {
+        const updated = await updateNodeCode(workflow.id, nodeId, code);
+        setWorkflow(updated);
+      } catch (err) {
+        setCodeError(err instanceof Error ? err.message : "Save failed");
+      } finally {
+        setSavingCode(false);
+      }
+    },
+    [workflow],
+  );
+
+  const selectedNode: FlowNodeDescriptor | null =
+    selectedNodeId && workflow?.flowGraph
+      ? (workflow.flowGraph.nodes.find((n) => n.id === selectedNodeId) ?? null)
+      : null;
+
   if (error && !workflow) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
@@ -113,6 +140,8 @@ export function WorkflowBuilderPage() {
         <WorkflowCanvas
           flowGraph={workflow?.flowGraph ?? null}
           loading={loading}
+          selectedNodeId={selectedNodeId}
+          onNodeClick={setSelectedNodeId}
         />
 
         {loading && (
@@ -132,11 +161,15 @@ export function WorkflowBuilderPage() {
         />
       </div>
 
-      {/* Right info panel — placeholder for future increment */}
-      <div className="hidden w-80 shrink-0 border-l border-border lg:block">
-        <div className="flex h-full items-center justify-center">
-          <p className="text-xs text-muted-foreground/50">Info panel</p>
-        </div>
+      {/* Right panel — node code inspector */}
+      <div className="hidden w-96 shrink-0 border-l border-border lg:block">
+        <NodeCodePanel
+          key={`${selectedNode?.id ?? ""}:${selectedNode?.code ?? ""}`}
+          node={selectedNode}
+          onSave={handleSaveNodeCode}
+          saving={savingCode}
+          error={codeError}
+        />
       </div>
     </div>
   );

@@ -1,7 +1,11 @@
 import express, { type Request, type Response } from "express";
 import { z } from "zod";
 import { pool } from "../db.js";
-import { generateWorkflow } from "../services/llm-generation.js";
+import { composeWorkflowCode } from "../services/compose-workflow-code.js";
+import {
+  findUnknownToolCalls,
+  generateWorkflow,
+} from "../services/llm-generation.js";
 import { runWorkflowInSandbox } from "../services/workflow-e2b-runner.js";
 import type { FlowGraph, WorkflowEvent } from "../workflow-sdk.js";
 
@@ -88,12 +92,11 @@ export function workflowsRouter(): express.Router {
     }
 
     let existingTriggerEvents: string[] | undefined;
-    let existingCode: string | undefined;
     let existingFlowGraph: FlowGraph | undefined;
 
     if (workflowId) {
       const existing = await pool.query<WorkflowRow>(
-        `SELECT trigger_events, generated_code, flow_graph FROM workflows WHERE id = $1`,
+        `SELECT trigger_events, flow_graph FROM workflows WHERE id = $1`,
         [workflowId],
       );
       if (existing.rowCount === 0) {
@@ -101,7 +104,6 @@ export function workflowsRouter(): express.Router {
         return;
       }
       existingTriggerEvents = existing.rows[0]!.trigger_events;
-      existingCode = existing.rows[0]!.generated_code;
       existingFlowGraph = existing.rows[0]!.flow_graph ?? undefined;
     }
 
@@ -110,7 +112,6 @@ export function workflowsRouter(): express.Router {
       outcome = await generateWorkflow({
         prompt,
         existingTriggerEvents,
-        existingCode,
         existingFlowGraph,
       });
     } catch (err) {
@@ -132,6 +133,7 @@ export function workflowsRouter(): express.Router {
     let row: WorkflowRow;
 
     const flowGraphJson = JSON.stringify(outcome.flow);
+    const composedCode = composeWorkflowCode(outcome.flow);
 
     if (workflowId) {
       const { rows } = await pool.query<WorkflowRow>(
@@ -140,7 +142,7 @@ export function workflowsRouter(): express.Router {
              flow_graph = $5, updated_at = CURRENT_TIMESTAMP
          WHERE id = $1
          RETURNING ${WORKFLOW_COLS}`,
-        [workflowId, outcome.trigger_events, outcome.code, prompt, flowGraphJson],
+        [workflowId, outcome.trigger_events, composedCode, prompt, flowGraphJson],
       );
       row = rows[0]!;
     } else {
@@ -156,7 +158,7 @@ export function workflowsRouter(): express.Router {
         `INSERT INTO workflows (name, trigger_events, original_prompt, generated_code, flow_graph)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING ${WORKFLOW_COLS}`,
-        [name, outcome.trigger_events, prompt, outcome.code, flowGraphJson],
+        [name, outcome.trigger_events, prompt, composedCode, flowGraphJson],
       );
       row = rows[0]!;
     }
@@ -247,6 +249,75 @@ export function workflowsRouter(): express.Router {
     }
 
     res.json(workflowToJson(rows[0]!));
+  });
+
+  r.patch("/:id/nodes/:nodeId/code", async (req: Request, res: Response) => {
+    const id = req.params.id as string | undefined;
+    const nodeId = req.params.nodeId as string | undefined;
+
+    if (!id || !isUuid(id)) {
+      res.status(400).json({ error: "Invalid workflow id" });
+      return;
+    }
+    if (!nodeId || nodeId.trim().length === 0) {
+      res.status(400).json({ error: "Invalid node id" });
+      return;
+    }
+
+    const code =
+      typeof req.body?.code === "string" ? req.body.code : undefined;
+    if (code === undefined) {
+      res.status(400).json({ error: "code is required" });
+      return;
+    }
+
+    const { rows, rowCount } = await pool.query<WorkflowRow>(
+      `SELECT ${WORKFLOW_COLS} FROM workflows WHERE id = $1`,
+      [id],
+    );
+    if (rowCount === 0) {
+      res.status(404).json({ error: "Workflow not found" });
+      return;
+    }
+
+    const row = rows[0]!;
+    const flowGraph: FlowGraph | null = row.flow_graph;
+    if (!flowGraph) {
+      res.status(422).json({ error: "Workflow has no flow graph" });
+      return;
+    }
+
+    const node = flowGraph.nodes.find((n) => n.id === nodeId);
+    if (!node) {
+      res.status(404).json({ error: `Node "${nodeId}" not found in flow graph` });
+      return;
+    }
+    if (node.type === "trigger") {
+      res.status(422).json({ error: "Trigger nodes do not have editable code" });
+      return;
+    }
+
+    const unknownMethods = findUnknownToolCalls(code);
+    if (unknownMethods.length > 0) {
+      res.status(422).json({
+        error: `Code references unknown tools: ${unknownMethods.map((m) => `tools.${m}`).join(", ")}`,
+      });
+      return;
+    }
+
+    node.code = code;
+    const composedCode = composeWorkflowCode(flowGraph);
+    const flowGraphJson = JSON.stringify(flowGraph);
+
+    const { rows: updated } = await pool.query<WorkflowRow>(
+      `UPDATE workflows
+       SET flow_graph = $2, generated_code = $3, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING ${WORKFLOW_COLS}`,
+      [id, flowGraphJson, composedCode],
+    );
+
+    res.json(workflowToJson(updated[0]!));
   });
 
   r.post("/:id/run-test", async (req: Request, res: Response) => {
