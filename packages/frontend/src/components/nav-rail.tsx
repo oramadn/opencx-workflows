@@ -39,8 +39,8 @@ export function NavRail() {
             title={label}
             className={({ isActive }) =>
               cn(
-                "flex min-h-10 cursor-pointer items-center gap-3 rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-                expanded ? "justify-start px-2" : "justify-center px-0",
+                "flex min-h-10 cursor-pointer items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                expanded ? "justify-start gap-3 px-2" : "justify-center gap-0 px-0",
                 isActive && "bg-accent text-accent-foreground",
               )
             }
@@ -48,7 +48,7 @@ export function NavRail() {
             <Icon className="size-5 shrink-0" aria-hidden />
             <span
               className={cn(
-                "overflow-hidden whitespace-nowrap text-sm font-medium transition-[opacity,max-width] duration-200",
+                "min-w-0 overflow-hidden whitespace-nowrap text-sm font-medium transition-[opacity,max-width] duration-200",
                 expanded ? "max-w-[10rem] opacity-100" : "max-w-0 opacity-0",
               )}
             >
@@ -62,7 +62,7 @@ export function NavRail() {
         type="button"
         className={cn(
           "mt-1 flex min-h-9 cursor-pointer items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
-          expanded ? "justify-start gap-2 px-2" : "justify-center px-0",
+          expanded ? "justify-start gap-2 px-2" : "justify-center gap-0 px-0",
         )}
         onClick={() => setPinnedOpen((p) => !p)}
         aria-expanded={pinnedOpen}
@@ -76,7 +76,7 @@ export function NavRail() {
         )}
         <span
           className={cn(
-            "overflow-hidden whitespace-nowrap text-left text-sm transition-[opacity,max-width] duration-200",
+            "min-w-0 overflow-hidden whitespace-nowrap text-left text-sm transition-[opacity,max-width] duration-200",
             expanded ? "max-w-[10rem] opacity-100" : "max-w-0 opacity-0",
           )}
         >
