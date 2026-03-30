@@ -7,13 +7,14 @@ import {
   getWorkflow,
   renameWorkflow,
   updateNodeCode,
+  updateNodeLabel,
 } from "@/api/workflows";
 import { WorkflowCanvas } from "@/components/workflow/canvas/workflow-canvas";
 import {
   ChatBar,
   type PromptEntry,
 } from "@/components/workflow/chat-bar";
-import { NodeCodePanel } from "@/components/workflow/node-code-panel";
+import { SidePanel } from "@/components/workflow/side-panel";
 import { WorkflowTitle } from "@/components/workflow/workflow-title";
 import type { FlowNodeDescriptor, WorkflowDetail } from "@/types/workflow";
 
@@ -138,6 +139,19 @@ export function WorkflowBuilderPage() {
     [workflow],
   );
 
+  const handleRenameNode = useCallback(
+    async (nodeId: string, label: string) => {
+      if (!workflow) return;
+      try {
+        const updated = await updateNodeLabel(workflow.id, nodeId, label);
+        setWorkflow(updated);
+      } catch {
+        // Silently ignore rename errors for now
+      }
+    },
+    [workflow],
+  );
+
   const selectedNode: FlowNodeDescriptor | null =
     selectedNodeId && workflow?.flowGraph
       ? (workflow.flowGraph.nodes.find((n) => n.id === selectedNodeId) ?? null)
@@ -169,6 +183,7 @@ export function WorkflowBuilderPage() {
           loading={loading}
           selectedNodeId={selectedNodeId}
           onNodeClick={setSelectedNodeId}
+          onPaneClick={() => setSelectedNodeId(null)}
         />
 
         {loading && (
@@ -203,12 +218,15 @@ export function WorkflowBuilderPage() {
             document.body.style.userSelect = "none";
           }}
         />
-        <NodeCodePanel
+        <SidePanel
           key={`${selectedNode?.id ?? ""}:${selectedNode?.code ?? ""}`}
-          node={selectedNode}
-          onSave={handleSaveNodeCode}
-          saving={savingCode}
-          error={codeError}
+          workflow={workflow}
+          selectedNode={selectedNode}
+          onSaveCode={handleSaveNodeCode}
+          onRenameNode={handleRenameNode}
+          onRenameWorkflow={handleRename}
+          savingCode={savingCode}
+          codeError={codeError}
         />
       </div>
     </div>

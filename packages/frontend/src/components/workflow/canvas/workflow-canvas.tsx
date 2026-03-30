@@ -39,6 +39,7 @@ interface WorkflowCanvasProps {
   loading?: boolean;
   selectedNodeId?: string | null;
   onNodeClick?: (nodeId: string) => void;
+  onPaneClick?: () => void;
 }
 
 function CanvasInner({
@@ -46,6 +47,7 @@ function CanvasInner({
   loading,
   selectedNodeId,
   onNodeClick,
+  onPaneClick,
 }: WorkflowCanvasProps) {
   const { nodes: layoutNodes, edges } = useAutoLayout(flowGraph);
 
@@ -70,6 +72,7 @@ function CanvasInner({
       nodesConnectable={false}
       elementsSelectable
       onNodeClick={(_event, node) => onNodeClick?.(node.id)}
+      onPaneClick={() => onPaneClick?.()}
       proOptions={{ hideAttribution: true }}
       className="bg-background"
     >

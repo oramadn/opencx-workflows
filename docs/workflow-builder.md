@@ -291,6 +291,7 @@ Base path: **`/api/workflows`** (JSON). Backend: `packages/backend/src/routes/wo
 | `GET` | `/api/workflows/:id` | -- | Full workflow record including `generatedCode` |
 | `POST` | `/api/workflows/generate` | `{ prompt, workflowId? }` | Generate new or refine existing workflow. Returns `422` with `{ error, unsupportedCapabilities }` if the prompt requires triggers or tools that do not exist in the SDK. |
 | `PATCH` | `/api/workflows/:id/nodes/:nodeId/code` | `{ code: string }` | Update a single node's step code in the flow graph. Recomposes `generated_code`. Returns `422` if unknown tools are referenced or node is a trigger. |
+| `PATCH` | `/api/workflows/:id/nodes/:nodeId/label` | `{ label: string }` | Rename a node's label in the flow graph. Recomposes `generated_code` (step comments update). |
 | `POST` | `/api/workflows/:id/run-test` | `WorkflowEvent` (JSON) | Execute workflow in E2B sandbox with a sample event. Returns `{ exitCode, stdout, stderr }`. |
 
 ### POST /generate flow
@@ -360,7 +361,7 @@ A generic engine that converts `QueryOptions` into parameterized SQL:
 | Custom nodes | `packages/frontend/src/components/workflow/canvas/nodes/{trigger,condition,action}-node.tsx` |
 | Auto-layout hook | `packages/frontend/src/components/workflow/canvas/use-auto-layout.ts` |
 | Chat bar | `packages/frontend/src/components/workflow/chat-bar.tsx` |
-| Node code panel (CodeMirror) | `packages/frontend/src/components/workflow/node-code-panel.tsx` |
+| Side panel (tabbed, CodeMirror) | `packages/frontend/src/components/workflow/side-panel.tsx` |
 | Code viewer (shiki) | `packages/frontend/src/components/workflow/code-viewer.tsx` |
 | Prompt panel (legacy) | `packages/frontend/src/components/workflow/prompt-panel.tsx` |
 | Run test panel | `packages/frontend/src/components/workflow/run-test-panel.tsx` |
@@ -394,7 +395,7 @@ Three-zone layout: **React Flow canvas** (main area with floating chat bar), **n
 
 - **Canvas:** Renders the `flowGraph` from the workflow record using `@xyflow/react`. Node positions are computed automatically by **dagre** (top-to-bottom). Three custom node types: trigger (green), condition (amber), action (blue). Nodes are selectable — clicking highlights the node and populates the code panel.
 - **Chat bar:** Bottom input area with scrollable message history. Replaces the legacy full-height prompt panel. Enter submits, Shift+Enter for newlines.
-- **Node code panel:** Right sidebar (hidden on small screens). Shows the selected node's step code in a CodeMirror 6 editor (action/condition nodes are editable; trigger nodes show a read-only event payload shape). Includes a Save button that PATCHes the node code and recomposes `generated_code`.
+- **Side panel:** Right sidebar (hidden on small screens) with two tabs that adapt to selection context. **No selection:** "Workflow" tab shows name (editable), triggers, status; "Code" tab shows the full composed `generatedCode` read-only. **Node selected:** "Details" tab shows node label (editable via `PATCH /:id/nodes/:nodeId/label`), type, and ID; "Code" tab shows the node's step code in a CodeMirror 6 editor with syntax linting and a Save button.
 - **Create mode:** empty canvas with placeholder text, first prompt creates the workflow. After generation, the URL is replaced with `/workflows/:id` for subsequent refinements.
 - **Edit mode:** fetches existing workflow on mount, populates canvas from `flowGraph`, user continues refining.
 - **Prompt history:** ephemeral React state (not persisted to DB). Shows previous prompts as chat-like bubbles.

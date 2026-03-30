@@ -331,6 +331,70 @@ export function workflowsRouter(): express.Router {
     res.json(workflowToJson(updated[0]!));
   });
 
+  r.patch("/:id/nodes/:nodeId/label", async (req: Request, res: Response) => {
+    const id = req.params.id as string | undefined;
+    const nodeId = req.params.nodeId as string | undefined;
+
+    if (!id || !isUuid(id)) {
+      res.status(400).json({ error: "Invalid workflow id" });
+      return;
+    }
+    if (!nodeId || nodeId.trim().length === 0) {
+      res.status(400).json({ error: "Invalid node id" });
+      return;
+    }
+
+    const label =
+      typeof req.body?.label === "string" ? req.body.label.trim() : "";
+    if (label.length === 0) {
+      res.status(400).json({ error: "label must be a non-empty string" });
+      return;
+    }
+    if (label.length > 80) {
+      res.status(400).json({ error: "label must be at most 80 characters" });
+      return;
+    }
+
+    const { rows, rowCount } = await pool.query<WorkflowRow>(
+      `SELECT ${WORKFLOW_COLS} FROM workflows WHERE id = $1`,
+      [id],
+    );
+    if (rowCount === 0) {
+      res.status(404).json({ error: "Workflow not found" });
+      return;
+    }
+
+    const row = rows[0]!;
+    const flowGraph: FlowGraph | null = row.flow_graph;
+    if (!flowGraph) {
+      res.status(422).json({ error: "Workflow has no flow graph" });
+      return;
+    }
+
+    const node = flowGraph.nodes.find((n) => n.id === nodeId);
+    if (!node) {
+      res
+        .status(404)
+        .json({ error: `Node "${nodeId}" not found in flow graph` });
+      return;
+    }
+
+    node.label = label;
+
+    const composedCode = composeWorkflowCode(flowGraph);
+    const flowGraphJson = JSON.stringify(flowGraph);
+
+    const { rows: updated } = await pool.query<WorkflowRow>(
+      `UPDATE workflows
+       SET flow_graph = $2, generated_code = $3, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING ${WORKFLOW_COLS}`,
+      [id, flowGraphJson, composedCode],
+    );
+
+    res.json(workflowToJson(updated[0]!));
+  });
+
   r.post("/:id/run-test", async (req: Request, res: Response) => {
     const id = req.params.id as string | undefined;
     if (!id || !isUuid(id)) {
