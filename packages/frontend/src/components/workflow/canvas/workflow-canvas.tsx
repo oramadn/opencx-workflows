@@ -12,6 +12,7 @@ import type { FlowGraph } from "@/types/workflow";
 import { CustomControls } from "./custom-controls";
 import { ActionNode } from "./nodes/action-node";
 import { ConditionNode } from "./nodes/condition-node";
+import { DelayNode } from "./nodes/delay-node";
 import { TriggerNode } from "./nodes/trigger-node";
 import { useAutoLayout } from "./use-auto-layout";
 
@@ -19,6 +20,7 @@ const nodeTypes = {
   trigger: TriggerNode,
   condition: ConditionNode,
   action: ActionNode,
+  delay: DelayNode,
 };
 
 function EmptyState({ loading }: { loading: boolean }) {

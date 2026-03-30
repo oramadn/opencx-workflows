@@ -22,7 +22,7 @@ function getClient(): OpenAI {
 
 const FlowNodeSchema = z.object({
   id: z.string().min(1),
-  type: z.enum(["trigger", "condition", "action"]),
+  type: z.enum(["trigger", "condition", "action", "delay"]),
   label: z.string().min(1),
   code: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
@@ -43,10 +43,18 @@ const FlowGraphSchema = z
   })
   .superRefine((graph, ctx) => {
     for (const node of graph.nodes) {
-      if (node.type !== "trigger" && (!node.code || node.code.trim() === "")) {
+      if (node.type === "trigger") continue;
+      if (!node.code || node.code.trim() === "") {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: `Non-trigger node "${node.id}" must have a non-empty "code" field`,
+          path: ["nodes"],
+        });
+      }
+      if (node.type === "delay" && !/^\d+\s*(ms|s|m|h|d)$/.test(node.code?.trim() ?? "")) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Delay node "${node.id}" code must be a duration string (e.g. "30s", "5m", "1h", "1d")`,
           path: ["nodes"],
         });
       }
@@ -107,9 +115,10 @@ function buildSystemPrompt(
 ): string {
   let prompt = `You are a workflow code generator for a customer support system.
 
-CAPABILITIES — these are the ONLY triggers and tools available:
+CAPABILITIES — these are the ONLY triggers, tools, and scheduling primitives available:
   Triggers: ${VALID_TRIGGERS.join(", ")}
   Tools: ${VALID_TOOL_METHODS.join(", ")}
+  Scheduling: delay nodes — durably pause workflow execution for a duration
 
 Your response MUST be a single JSON object with a "status" key that is either "ok" or "rejected".
 
@@ -131,6 +140,7 @@ STEP-CODE ARCHITECTURE — each flow node carries its own code snippet instead o
   - "trigger" nodes: NO "code" field. Triggers represent event subscriptions, not executable code.
   - "action" nodes: "code" is the step body — tool calls, data preparation, assignments. This code runs inside an async IIFE with access to \`event\`, \`tools\`, and a shared \`context\` object.
   - "condition" nodes: "code" is a boolean expression (e.g. \`event.sentiment === 'angry'\`). The runtime wraps it in an if-statement.
+  - "delay" nodes: "code" is a duration string using units s/m/h/d (e.g. "30s", "5m", "1h", "1d"). The runtime durably pauses execution for that duration. Use delay nodes between action nodes when the user asks to wait, pause, or schedule a follow-up after some time.
 
 INTER-STEP DATA FLOW — the \`context\` convention:
   Steps share data through a \`context\` object provided by the runtime.
@@ -154,7 +164,8 @@ FLOW GRAPH — you MUST produce a "flow" object:
     "nodes": [
       { "id": "<unique-id>", "type": "trigger", "label": "<event name>" },
       { "id": "<unique-id>", "type": "action", "label": "<short label>", "code": "<step body>" },
-      { "id": "<unique-id>", "type": "condition", "label": "<question?>", "code": "<boolean expression>" }
+      { "id": "<unique-id>", "type": "condition", "label": "<question?>", "code": "<boolean expression>" },
+      { "id": "<unique-id>", "type": "delay", "label": "Wait 5 minutes", "code": "5m" }
     ],
     "edges": [
       { "source": "<node-id>", "target": "<node-id>", "label": "<optional: Yes/No for conditions>" }
@@ -164,9 +175,10 @@ FLOW GRAPH — you MUST produce a "flow" object:
 Rules for the flow graph:
   - Every trigger event in "trigger_events" must have a corresponding trigger node.
   - The graph must be a connected DAG starting from trigger node(s).
-  - Node IDs must be unique strings (e.g. "trigger-1", "condition-1", "action-1").
+  - Node IDs must be unique strings (e.g. "trigger-1", "condition-1", "action-1", "delay-1").
   - Every non-trigger node MUST have a non-empty "code" field.
   - Condition nodes must have "Yes"/"No" labeled edges to downstream nodes.
+  - Delay node "code" must be ONLY a duration string (e.g. "30s", "5m", "1h", "1d") — no JavaScript.
   - Keep labels concise (under 40 characters).
 
 Here are the COMPLETE TypeScript type definitions — this is your compiler reference.
@@ -244,7 +256,7 @@ export async function generateWorkflow(
   if (outcome.status === "ok") {
     const allUnknown: string[] = [];
     for (const node of outcome.flow.nodes) {
-      if (!node.code) continue;
+      if (!node.code || node.type === "delay") continue;
       for (const method of findUnknownToolCalls(node.code)) {
         if (!allUnknown.includes(method)) allUnknown.push(method);
       }

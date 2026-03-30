@@ -2,7 +2,7 @@
 // Flow graph types — mirrors backend FlowGraph from workflow-sdk.ts
 // ---------------------------------------------------------------------------
 
-export type FlowNodeType = "trigger" | "condition" | "action";
+export type FlowNodeType = "trigger" | "condition" | "action" | "delay";
 
 export interface FlowNodeDescriptor {
   id: string;

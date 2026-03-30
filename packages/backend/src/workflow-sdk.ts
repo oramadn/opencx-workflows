@@ -124,7 +124,7 @@ export interface WorkflowTools {
 // Flow Graph — visual representation of workflow logic for React Flow canvas
 // ---------------------------------------------------------------------------
 
-export type FlowNodeType = "trigger" | "condition" | "action";
+export type FlowNodeType = "trigger" | "condition" | "action" | "delay";
 
 export interface FlowNodeDescriptor {
   id: string;

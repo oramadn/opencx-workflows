@@ -1,4 +1,5 @@
 import type { FlowGraph, FlowNodeDescriptor } from "../workflow-sdk.js";
+import { parseDuration } from "./parse-duration.js";
 
 /**
  * Deterministic composition engine: walks the flow graph in topological order
@@ -93,6 +94,17 @@ function emitNode(
     }
 
     lines.push(`${indent}}`);
+    return;
+  }
+
+  if (node.type === "delay") {
+    const ms = parseDuration(node.code ?? "0");
+    lines.push(`${indent}// Step: ${node.id} — ${node.label}`);
+    lines.push(`${indent}await new Promise(r => setTimeout(r, ${ms}));`);
+
+    for (const child of children) {
+      emitNode(child.target, lines, nodeMap, childrenOf, emitted, depth);
+    }
     return;
   }
 

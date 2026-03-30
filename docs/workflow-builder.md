@@ -145,6 +145,7 @@ The LLM no longer generates a monolithic `run()` function. Instead, each non-tri
 - **Trigger nodes:** No `code` — they represent event subscriptions.
 - **Action nodes:** `code` is the step body (tool calls, data preparation, context assignments).
 - **Condition nodes:** `code` is a boolean expression (e.g. `event.sentiment === 'angry'`).
+- **Delay nodes:** `code` is a duration string (e.g. `"5m"`, `"1h"`, `"30s"`, `"1d"`). The runtime durably pauses execution for that duration using graphile-worker job scheduling.
 
 The per-node code fields in `flow_graph` are the **source of truth**. The `generated_code` column is a **derived artifact** produced deterministically by the composition engine (`composeWorkflowCode()`).
 
@@ -165,7 +166,8 @@ A pure, deterministic function `composeWorkflowCode(flowGraph: FlowGraph): strin
 2. Skips trigger nodes (no executable code).
 3. Wraps each action node's code in `await (async () => { ... })();` with a comment header.
 4. For condition nodes, emits `if (<code>) { ... } else { ... }` using "Yes"/"No" edge labels.
-5. Wraps everything in `export default async function run(event, tools) { const context = {}; ... }`.
+5. For delay nodes, emits `await new Promise(r => setTimeout(r, <ms>));` (for test/preview — real execution uses graphile-worker).
+6. Wraps everything in `export default async function run(event, tools) { const context = {}; ... }`.
 
 This function is called:
 - After LLM generation (in `POST /generate`)
@@ -216,9 +218,9 @@ Alongside the executable code, the LLM also generates a **flow graph descriptor*
 ```typescript
 interface FlowNodeDescriptor {
   id: string;
-  type: "trigger" | "condition" | "action";
+  type: "trigger" | "condition" | "action" | "delay";
   label: string;
-  code?: string;           // per-step code (action/condition); absent for triggers
+  code?: string;           // per-step code (action/condition/delay); absent for triggers
   metadata?: Record<string, unknown>;
 }
 
@@ -241,6 +243,7 @@ interface FlowGraph {
 | `trigger` | Entry point for a subscribed event | Green border, lightning icon |
 | `condition` | Branching decision (if/else on event or query data) | Amber border, branch icon |
 | `action` | Tool call or side effect | Blue border, play icon |
+| `delay` | Durable pause for a specified duration | Violet border, clock icon |
 
 ### Storage and generation
 
@@ -421,12 +424,41 @@ Three-zone layout: **React Flow canvas** (main area with floating chat bar), **n
 
 The backend loads `.env` via `--env-file=.env` in the `tsx` dev/start scripts.
 
+## Durable delay execution
+
+Workflows that contain **delay nodes** use a segment-based execution model instead of a single E2B sandbox call:
+
+1. **`dispatchTrigger()`** checks whether the workflow's flow graph contains any delay nodes.
+2. If no delays, the existing fast path applies (compose full code → single E2B call).
+3. If delays are present, a `workflow_runs` row is inserted and a `execute_workflow_segment` **graphile-worker** job is enqueued.
+4. The **segment executor** (`workflow-segment-executor.ts`) walks the graph node-by-node on the host:
+   - **Trigger nodes** are skipped.
+   - **Action nodes** execute in E2B via `runStepInSandbox()` (per-step harness).
+   - **Condition nodes** are evaluated on the host.
+   - **Delay nodes** persist current state to `workflow_runs` and schedule a future job with `runAt = now + delay`.
+5. When the delayed job fires, the executor resumes from the saved `resume_from` node.
+6. The test endpoint (`POST /:id/run-test`) still uses the composed code with `setTimeout`-based delays for instant feedback.
+
+### `workflow_runs` table
+
+Tracks durable execution state. Schema: `docker/postgres/init/04-workflow-runs.sql`.
+
+| Column | Purpose |
+|--------|---------|
+| `resume_from` | Node ID to resume from after a delay (null = start from roots) |
+| `visited` | Array of already-executed node IDs |
+| `context` | Accumulated shared context object (JSONB) |
+| `status` | `running` / `delayed` / `completed` / `failed` |
+
+### graphile-worker setup
+
+graphile-worker is started alongside Express in `packages/backend/src/index.ts`. It auto-migrates its schema on first `run()`. The task list is defined in `workflow-segment-executor.ts`.
+
 ## What's not wired up yet (Phase 3)
 
 - **Prompt history persistence:** prompt log is ephemeral. Could add a `prompt_history JSONB` column if needed.
-- **Durable workflow execution:** Introduce [Workflow DevKit](https://useworkflow.dev/) (`@workflow/world-postgres`) for durable functions so workflow runs survive restarts and support retries.
-- **Sleep / delay support:** Verify that long-running `sleep`-style delays work correctly inside durable workflows (e.g. "wait 5 minutes then send a follow-up email").
 - **User-draggable node positions:** Persist manual node repositioning alongside the auto-laid-out flow graph.
 - **AST validation:** Post-generation check that the flow graph nodes match the actual code structure (defense against flow/code desync).
 - **Add code review step to ensure nothing malicious or expensive is running**
 - **Run-test in code panel:** Add a "Test" button in the node code panel to run the workflow in E2B with a sample event.
+- **Condition node sandboxing:** Currently evaluates AI-generated condition code on the host via `new Function()`. For production, move to E2B or a constrained expression evaluator.

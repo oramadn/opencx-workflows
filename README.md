@@ -26,7 +26,7 @@ docker compose up -d
 
 Default database: **`workflows`**, user **`postgres`**, password **`password`**, port **`5432`**.
 
-On the **first** start with an **empty** data volume, scripts in `docker/postgres/init/` run automatically (`01-schema.sql`, `02-session-messages.sql`, `03-flow-graph.sql`). If you already had an old volume or the init SQL changed, reset data:
+On the **first** start with an **empty** data volume, scripts in `docker/postgres/init/` run automatically (`01-schema.sql`, `02-session-messages.sql`, `03-flow-graph.sql`, `04-workflow-runs.sql`). If you already had an old volume or the init SQL changed, reset data:
 
 ```bash
 docker compose down -v   # destructive: deletes the Docker volume
@@ -65,6 +65,20 @@ pnpm workflow:postgres-setup
 This adds the **`workflow`** and **`graphile_worker`** schemas (and related objects). App tables stay in **`public`**. In `psql`, use `\dt public.*`, `\dt workflow.*`, and `\dt graphile_worker.*`—plain `\dt` only shows `public` by default.
 
 Workflow runtime is **not** started by Express yet; this step only prepares the database.
+
+### Workflow runs table (existing volumes)
+
+If you have an existing Docker volume (i.e. the `04-workflow-runs.sql` init script didn't run), apply the migration manually:
+
+```bash
+psql postgresql://postgres:password@localhost:5432/workflows -f docker/postgres/init/04-workflow-runs.sql
+```
+
+The DDL uses `CREATE TABLE IF NOT EXISTS` so it is safe to re-run.
+
+### graphile-worker schema
+
+**graphile-worker** auto-migrates its internal schema on first boot. When you start the backend (`pnpm backend:dev`), the worker starts alongside Express and creates its tables in the `graphile_worker` schema if they don't already exist. No manual step needed.
 
 ### 5. Optional: pnpm build scripts
 
