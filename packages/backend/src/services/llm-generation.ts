@@ -162,8 +162,8 @@ Per-step code MUST NEVER:
 FLOW GRAPH — you MUST produce a "flow" object:
   {
     "nodes": [
-      { "id": "<unique-id>", "type": "trigger", "label": "<event name>" },
-      { "id": "<unique-id>", "type": "action", "label": "<short label>", "code": "<step body>" },
+      { "id": "<unique-id>", "type": "trigger", "label": "<event name>", "metadata": { "triggerType": "<trigger name>" } },
+      { "id": "<unique-id>", "type": "action", "label": "<short label>", "code": "<step body>", "metadata": { "toolMethod": "<primary tool called>" } },
       { "id": "<unique-id>", "type": "condition", "label": "<question?>", "code": "<boolean expression>" },
       { "id": "<unique-id>", "type": "delay", "label": "Wait 5 minutes", "code": "5m" }
     ],
@@ -180,6 +180,11 @@ Rules for the flow graph:
   - Condition nodes must have "Yes"/"No" labeled edges to downstream nodes.
   - Delay node "code" must be ONLY a duration string (e.g. "30s", "5m", "1h", "1d") — no JavaScript.
   - Keep labels concise (under 40 characters).
+
+NODE METADATA — used by the UI to display the correct icon for each node:
+  - Every "trigger" node MUST include "metadata": { "triggerType": "<name>" } where <name> is the matching trigger from trigger_events (one of: ${VALID_TRIGGERS.join(", ")}).
+  - Every "action" node MUST include "metadata": { "toolMethod": "<name>" } where <name> is the PRIMARY tools method that the step's code calls (one of: ${VALID_TOOL_METHODS.join(", ")}). If the step calls multiple tools, use the most important one.
+  - "condition" and "delay" nodes do not need metadata.
 
 Here are the COMPLETE TypeScript type definitions — this is your compiler reference.
 The step code you produce must conform to these types exactly:
