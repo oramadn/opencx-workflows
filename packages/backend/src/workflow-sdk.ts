@@ -119,3 +119,27 @@ export interface WorkflowTools {
     message: string,
   ): Promise<void>;
 }
+
+// ---------------------------------------------------------------------------
+// Flow Graph — visual representation of workflow logic for React Flow canvas
+// ---------------------------------------------------------------------------
+
+export type FlowNodeType = "trigger" | "condition" | "action";
+
+export interface FlowNodeDescriptor {
+  id: string;
+  type: FlowNodeType;
+  label: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface FlowEdgeDescriptor {
+  source: string;
+  target: string;
+  label?: string;
+}
+
+export interface FlowGraph {
+  nodes: FlowNodeDescriptor[];
+  edges: FlowEdgeDescriptor[];
+}

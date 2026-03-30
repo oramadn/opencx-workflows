@@ -1,0 +1,74 @@
+import {
+  Background,
+  BackgroundVariant,
+  ReactFlow,
+  ReactFlowProvider,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import { Workflow } from "lucide-react";
+
+import type { FlowGraph } from "@/types/workflow";
+
+import { CustomControls } from "./custom-controls";
+import { ActionNode } from "./nodes/action-node";
+import { ConditionNode } from "./nodes/condition-node";
+import { TriggerNode } from "./nodes/trigger-node";
+import { useAutoLayout } from "./use-auto-layout";
+
+const nodeTypes = {
+  trigger: TriggerNode,
+  condition: ConditionNode,
+  action: ActionNode,
+};
+
+function EmptyState({ loading }: { loading: boolean }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
+      <Workflow className="h-12 w-12 opacity-30" />
+      <p className="text-sm">
+        {loading
+          ? "Generating workflow..."
+          : "Describe a workflow below to visualize it here"}
+      </p>
+    </div>
+  );
+}
+
+interface WorkflowCanvasProps {
+  flowGraph: FlowGraph | null;
+  loading?: boolean;
+}
+
+function CanvasInner({ flowGraph, loading }: WorkflowCanvasProps) {
+  const { nodes, edges } = useAutoLayout(flowGraph);
+
+  if (nodes.length === 0) {
+    return <EmptyState loading={loading ?? false} />;
+  }
+
+  return (
+    <ReactFlow
+      nodes={nodes}
+      edges={edges}
+      nodeTypes={nodeTypes}
+      fitView
+      fitViewOptions={{ padding: 0.3 }}
+      nodesDraggable={false}
+      nodesConnectable={false}
+      elementsSelectable={false}
+      proOptions={{ hideAttribution: true }}
+      className="bg-background"
+    >
+      <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+      <CustomControls />
+    </ReactFlow>
+  );
+}
+
+export function WorkflowCanvas(props: WorkflowCanvasProps) {
+  return (
+    <ReactFlowProvider>
+      <CanvasInner {...props} />
+    </ReactFlowProvider>
+  );
+}

@@ -72,6 +72,22 @@ export async function setWorkflowActive(
   return parseJson<WorkflowDetail>(res);
 }
 
+export async function renameWorkflow(
+  id: string,
+  name: string,
+): Promise<WorkflowDetail> {
+  const res = await fetch(`/api/workflows/${id}/name`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? "Failed to rename workflow");
+  }
+  return parseJson<WorkflowDetail>(res);
+}
+
 export async function runWorkflowTest(
   workflowId: string,
   event: Record<string, unknown>,

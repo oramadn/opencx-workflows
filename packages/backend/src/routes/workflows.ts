@@ -3,7 +3,7 @@ import { z } from "zod";
 import { pool } from "../db.js";
 import { generateWorkflow } from "../services/llm-generation.js";
 import { runWorkflowInSandbox } from "../services/workflow-e2b-runner.js";
-import type { WorkflowEvent } from "../workflow-sdk.js";
+import type { FlowGraph, WorkflowEvent } from "../workflow-sdk.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -18,6 +18,7 @@ type WorkflowRow = {
   trigger_events: string[];
   original_prompt: string;
   generated_code: string;
+  flow_graph: FlowGraph | null;
   is_active: boolean;
   created_at: Date;
   updated_at: Date;
@@ -30,6 +31,7 @@ function workflowToJson(row: WorkflowRow) {
     triggerEvents: row.trigger_events,
     originalPrompt: row.original_prompt,
     generatedCode: row.generated_code,
+    flowGraph: row.flow_graph,
     isActive: row.is_active,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
@@ -39,12 +41,12 @@ function workflowToJson(row: WorkflowRow) {
 export function workflowsRouter(): express.Router {
   const r = express.Router();
 
+  const WORKFLOW_COLS = `id, name, trigger_events, original_prompt, generated_code,
+              flow_graph, is_active, created_at, updated_at`;
+
   r.get("/", async (_req: Request, res: Response) => {
     const { rows } = await pool.query<WorkflowRow>(
-      `SELECT id, name, trigger_events, original_prompt, generated_code,
-              is_active, created_at, updated_at
-       FROM workflows
-       ORDER BY updated_at DESC`,
+      `SELECT ${WORKFLOW_COLS} FROM workflows ORDER BY updated_at DESC`,
     );
     res.json(rows.map(workflowToJson));
   });
@@ -57,9 +59,7 @@ export function workflowsRouter(): express.Router {
     }
 
     const { rows, rowCount } = await pool.query<WorkflowRow>(
-      `SELECT id, name, trigger_events, original_prompt, generated_code,
-              is_active, created_at, updated_at
-       FROM workflows WHERE id = $1`,
+      `SELECT ${WORKFLOW_COLS} FROM workflows WHERE id = $1`,
       [id],
     );
 
@@ -89,10 +89,11 @@ export function workflowsRouter(): express.Router {
 
     let existingTriggerEvents: string[] | undefined;
     let existingCode: string | undefined;
+    let existingFlowGraph: FlowGraph | undefined;
 
     if (workflowId) {
       const existing = await pool.query<WorkflowRow>(
-        `SELECT trigger_events, generated_code FROM workflows WHERE id = $1`,
+        `SELECT trigger_events, generated_code, flow_graph FROM workflows WHERE id = $1`,
         [workflowId],
       );
       if (existing.rowCount === 0) {
@@ -101,6 +102,7 @@ export function workflowsRouter(): express.Router {
       }
       existingTriggerEvents = existing.rows[0]!.trigger_events;
       existingCode = existing.rows[0]!.generated_code;
+      existingFlowGraph = existing.rows[0]!.flow_graph ?? undefined;
     }
 
     let outcome;
@@ -109,6 +111,7 @@ export function workflowsRouter(): express.Router {
         prompt,
         existingTriggerEvents,
         existingCode,
+        existingFlowGraph,
       });
     } catch (err) {
       const message =
@@ -126,27 +129,34 @@ export function workflowsRouter(): express.Router {
       return;
     }
 
-    const name = prompt.length > 80 ? prompt.slice(0, 77) + "..." : prompt;
     let row: WorkflowRow;
+
+    const flowGraphJson = JSON.stringify(outcome.flow);
 
     if (workflowId) {
       const { rows } = await pool.query<WorkflowRow>(
         `UPDATE workflows
          SET trigger_events = $2, generated_code = $3, original_prompt = $4,
-             updated_at = CURRENT_TIMESTAMP
+             flow_graph = $5, updated_at = CURRENT_TIMESTAMP
          WHERE id = $1
-         RETURNING id, name, trigger_events, original_prompt, generated_code,
-                   is_active, created_at, updated_at`,
-        [workflowId, outcome.trigger_events, outcome.code, prompt],
+         RETURNING ${WORKFLOW_COLS}`,
+        [workflowId, outcome.trigger_events, outcome.code, prompt, flowGraphJson],
       );
       row = rows[0]!;
     } else {
+      const nextNum = await pool
+        .query<{ n: string }>(
+          `SELECT COALESCE(MAX((REGEXP_MATCH(name, '^Untitled-(\\d+)$'))[1]::int), 0) + 1 AS n
+           FROM workflows WHERE name ~ '^Untitled-\\d+$'`,
+        )
+        .then((r) => Number(r.rows[0]!.n));
+      const name = `Untitled-${nextNum}`;
+
       const { rows } = await pool.query<WorkflowRow>(
-        `INSERT INTO workflows (name, trigger_events, original_prompt, generated_code)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, name, trigger_events, original_prompt, generated_code,
-                   is_active, created_at, updated_at`,
-        [name, outcome.trigger_events, prompt, outcome.code],
+        `INSERT INTO workflows (name, trigger_events, original_prompt, generated_code, flow_graph)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING ${WORKFLOW_COLS}`,
+        [name, outcome.trigger_events, prompt, outcome.code, flowGraphJson],
       );
       row = rows[0]!;
     }
@@ -193,9 +203,42 @@ export function workflowsRouter(): express.Router {
       `UPDATE workflows
        SET is_active = $2, updated_at = CURRENT_TIMESTAMP
        WHERE id = $1
-       RETURNING id, name, trigger_events, original_prompt, generated_code,
-                 is_active, created_at, updated_at`,
+       RETURNING ${WORKFLOW_COLS}`,
       [id, isActive],
+    );
+
+    if (rowCount === 0) {
+      res.status(404).json({ error: "Workflow not found" });
+      return;
+    }
+
+    res.json(workflowToJson(rows[0]!));
+  });
+
+  r.patch("/:id/name", async (req: Request, res: Response) => {
+    const id = req.params.id as string | undefined;
+    if (!id || !isUuid(id)) {
+      res.status(400).json({ error: "Invalid workflow id" });
+      return;
+    }
+
+    const name =
+      typeof req.body?.name === "string" ? req.body.name.trim() : "";
+    if (name.length === 0) {
+      res.status(400).json({ error: "name must be a non-empty string" });
+      return;
+    }
+    if (name.length > 255) {
+      res.status(400).json({ error: "name must be at most 255 characters" });
+      return;
+    }
+
+    const { rows, rowCount } = await pool.query<WorkflowRow>(
+      `UPDATE workflows
+       SET name = $2, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING ${WORKFLOW_COLS}`,
+      [id, name],
     );
 
     if (rowCount === 0) {

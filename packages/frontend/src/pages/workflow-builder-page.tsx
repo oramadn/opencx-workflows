@@ -5,14 +5,14 @@ import {
   WorkflowRejectedError,
   generateWorkflow,
   getWorkflow,
-  setWorkflowActive,
+  renameWorkflow,
 } from "@/api/workflows";
-import { CodeViewer } from "@/components/workflow/code-viewer";
+import { WorkflowCanvas } from "@/components/workflow/canvas/workflow-canvas";
 import {
-  PromptPanel,
+  ChatBar,
   type PromptEntry,
-} from "@/components/workflow/prompt-panel";
-import { RunTestPanel } from "@/components/workflow/run-test-panel";
+} from "@/components/workflow/chat-bar";
+import { WorkflowTitle } from "@/components/workflow/workflow-title";
 import type { WorkflowDetail } from "@/types/workflow";
 
 export function WorkflowBuilderPage() {
@@ -35,25 +35,14 @@ export function WorkflowBuilderPage() {
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Failed to load workflow");
+        setError(
+          err instanceof Error ? err.message : "Failed to load workflow",
+        );
       });
     return () => {
       cancelled = true;
     };
   }, [id]);
-
-  const handleToggleActive = useCallback(
-    async (active: boolean) => {
-      if (!workflow) return;
-      try {
-        const updated = await setWorkflowActive(workflow.id, active);
-        setWorkflow(updated);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to update workflow");
-      }
-    },
-    [workflow],
-  );
 
   const handleSubmit = useCallback(
     async (prompt: string) => {
@@ -91,6 +80,15 @@ export function WorkflowBuilderPage() {
     [workflow?.id, navigate],
   );
 
+  const handleRename = useCallback(
+    async (name: string) => {
+      if (!workflow) return;
+      const updated = await renameWorkflow(workflow.id, name);
+      setWorkflow(updated);
+    },
+    [workflow],
+  );
+
   if (error && !workflow) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
@@ -101,33 +99,44 @@ export function WorkflowBuilderPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-1">
-      <div className="flex w-[40%] min-w-[320px] flex-col border-r border-border">
-        <PromptPanel
+      {/* Main area: canvas with floating chat bar overlay */}
+      <div className="relative min-w-0 flex-1">
+        {/* Title bar — top left */}
+        {workflow && (
+          <div className="absolute left-3 top-3 z-10">
+            <div className="rounded-lg border border-border bg-background/95 px-2 py-1 shadow-sm backdrop-blur-sm">
+              <WorkflowTitle name={workflow.name} onRename={handleRename} />
+            </div>
+          </div>
+        )}
+
+        <WorkflowCanvas
+          flowGraph={workflow?.flowGraph ?? null}
+          loading={loading}
+        />
+
+        {loading && (
+          <div className="pointer-events-none absolute inset-0 z-[5] bg-background/40" />
+        )}
+
+        {error && workflow && (
+          <div className="absolute inset-x-0 top-0 z-20 border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-center text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        <ChatBar
           history={history}
           loading={loading}
           onSubmit={handleSubmit}
         />
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <CodeViewer
-          code={workflow?.generatedCode ?? ""}
-          triggerEvents={workflow?.triggerEvents ?? []}
-          loading={loading}
-          isActive={workflow?.isActive}
-          onToggleActive={workflow ? handleToggleActive : undefined}
-        />
-        {error && workflow && (
-          <div className="border-t border-border bg-destructive/10 px-4 py-2 text-sm text-destructive">
-            {error}
-          </div>
-        )}
-        {workflow && (
-          <RunTestPanel
-            workflowId={workflow.id}
-            triggerEvents={workflow.triggerEvents}
-          />
-        )}
+      {/* Right info panel — placeholder for future increment */}
+      <div className="hidden w-80 shrink-0 border-l border-border lg:block">
+        <div className="flex h-full items-center justify-center">
+          <p className="text-xs text-muted-foreground/50">Info panel</p>
+        </div>
       </div>
     </div>
   );

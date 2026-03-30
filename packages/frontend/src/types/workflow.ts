@@ -1,3 +1,31 @@
+// ---------------------------------------------------------------------------
+// Flow graph types — mirrors backend FlowGraph from workflow-sdk.ts
+// ---------------------------------------------------------------------------
+
+export type FlowNodeType = "trigger" | "condition" | "action";
+
+export interface FlowNodeDescriptor {
+  id: string;
+  type: FlowNodeType;
+  label: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface FlowEdgeDescriptor {
+  source: string;
+  target: string;
+  label?: string;
+}
+
+export interface FlowGraph {
+  nodes: FlowNodeDescriptor[];
+  edges: FlowEdgeDescriptor[];
+}
+
+// ---------------------------------------------------------------------------
+// Workflow DTOs
+// ---------------------------------------------------------------------------
+
 export interface WorkflowSummary {
   id: string;
   name: string;
@@ -10,6 +38,7 @@ export interface WorkflowSummary {
 export interface WorkflowDetail extends WorkflowSummary {
   originalPrompt: string;
   generatedCode: string;
+  flowGraph: FlowGraph | null;
 }
 
 export interface GenerateRequest {

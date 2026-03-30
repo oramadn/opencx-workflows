@@ -26,7 +26,7 @@ docker compose up -d
 
 Default database: **`workflows`**, user **`postgres`**, password **`password`**, port **`5432`**.
 
-On the **first** start with an **empty** data volume, scripts in `docker/postgres/init/` run automatically (`01-schema.sql`, `02-session-messages.sql`). If you already had an old volume or the init SQL changed (e.g. `trigger_events` column update), reset data:
+On the **first** start with an **empty** data volume, scripts in `docker/postgres/init/` run automatically (`01-schema.sql`, `02-session-messages.sql`, `03-flow-graph.sql`). If you already had an old volume or the init SQL changed, reset data:
 
 ```bash
 docker compose down -v   # destructive: deletes the Docker volume
