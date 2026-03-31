@@ -292,7 +292,7 @@ Base path: **`/api/workflows`** (JSON). Backend: `packages/backend/src/routes/wo
 |--------|------|------|-------|
 | `GET` | `/api/workflows` | -- | List all workflows, newest first |
 | `GET` | `/api/workflows/:id` | -- | Full workflow record including `generatedCode` |
-| `POST` | `/api/workflows/generate` | `{ prompt, workflowId? }` | Generate new or refine existing workflow. Returns `422` with `{ error, unsupportedCapabilities }` if the prompt requires triggers or tools that do not exist in the SDK. |
+| `POST` | `/api/workflows/generate` | `{ prompt, workflowId?, focusedNodeId? }` | Generate new or refine existing workflow. When `focusedNodeId` is provided the LLM focuses on that node (per-node chat). Returns `422` with `{ error, unsupportedCapabilities }` if the prompt requires triggers or tools that do not exist in the SDK. |
 | `PATCH` | `/api/workflows/:id/nodes/:nodeId/code` | `{ code: string }` | Update a single node's step code in the flow graph. Recomposes `generated_code`. Returns `422` if unknown tools are referenced or node is a trigger. |
 | `PATCH` | `/api/workflows/:id/nodes/:nodeId/label` | `{ label: string }` | Rename a node's label in the flow graph. Recomposes `generated_code` (step comments update). |
 | `POST` | `/api/workflows/:id/run-test` | `WorkflowEvent` (JSON) | Execute workflow in E2B sandbox with a sample event. Returns `{ exitCode, stdout, stderr }`. |
@@ -302,6 +302,7 @@ Base path: **`/api/workflows`** (JSON). Backend: `packages/backend/src/routes/wo
 1. Validate `prompt` (required, non-empty string).
 2. If `workflowId` provided, fetch existing `trigger_events`, `generated_code`, and `flow_graph` from DB (404 if not found).
 3. Build system prompt: role/constraints + raw `workflow-sdk.ts` source + optional existing state (including flow graph). The prompt explicitly lists allowed triggers (`VALID_TRIGGERS`) and tool methods (`VALID_TOOL_METHODS`) and instructs the LLM to return a `status: "rejected"` response for unsupported capabilities instead of inventing triggers or tools.
+   - **Node-focused mode:** When `focusedNodeId` is provided (and an existing workflow is loaded), an addendum is appended to the system prompt that identifies the focused node (type, label, code) and its immediate upstream/downstream neighbors. The LLM is instructed to treat the focused node as the primary subject, may modify neighbors when structurally required (e.g., node removal, insertion), but must not touch unrelated nodes. The response schema is unchanged — a full `FlowGraph` is always returned.
 4. Call OpenAI `gpt-4o` with `response_format: json_object`, temperature `0.2`.
 5. Parse LLM output with a Zod discriminated union on `status`:
    - `"ok"` — `trigger_events: string[]`, `flow: FlowGraph` (with per-node `code` fields). A Zod refinement validates non-trigger nodes have non-empty `code`. A post-parse guard scans each node's `code` for `tools.<method>` calls not in `VALID_TOOL_METHODS` (defense against hallucinations).
@@ -397,7 +398,7 @@ Three-zone layout: **React Flow canvas** (main area with floating chat bar), **n
 ```
 
 - **Canvas:** Renders the `flowGraph` from the workflow record using `@xyflow/react`. Node positions are computed automatically by **dagre** (top-to-bottom). Three custom node types: trigger (green), condition (amber), action (blue). Nodes are selectable — clicking highlights the node and populates the code panel.
-- **Chat bar:** Bottom input area with scrollable message history. Replaces the legacy full-height prompt panel. Enter submits, Shift+Enter for newlines.
+- **Chat bar:** Bottom input area with scrollable message history. Replaces the legacy full-height prompt panel. Enter submits, Shift+Enter for newlines. When a node is selected on the canvas, a **node-focus indicator** ("Editing [node label]") appears above the input with a dismiss button. Prompts submitted while a node is focused call `POST /generate` with `focusedNodeId`, allowing per-node natural language edits (e.g., "make this delay 3 minutes" or "change this to email instead of Slack"). The LLM may modify neighboring nodes when structurally required (e.g., removing a node and reconnecting edges). Dismissing the indicator (or clicking the canvas background) clears the focus and returns the chat bar to whole-workflow mode.
 - **Side panel:** Right sidebar (hidden on small screens) with two tabs that adapt to selection context. **No selection:** "Workflow" tab shows name (editable), triggers, status; "Code" tab shows the full composed `generatedCode` read-only. **Node selected:** "Details" tab shows node label (editable via `PATCH /:id/nodes/:nodeId/label`), type, and ID; "Code" tab shows the node's step code in a CodeMirror 6 editor with syntax linting and a Save button.
 - **Create mode:** empty canvas with placeholder text, first prompt creates the workflow. After generation, the URL is replaced with `/workflows/:id` for subsequent refinements.
 - **Edit mode:** fetches existing workflow on mount, populates canvas from `flowGraph`, user continues refining.

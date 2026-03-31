@@ -45,6 +45,8 @@ export interface WorkflowDetail extends WorkflowSummary {
 export interface GenerateRequest {
   prompt: string;
   workflowId?: string;
+  /** When set, the LLM focuses on this node (per-node chat). */
+  focusedNodeId?: string;
 }
 
 export interface RunTestResult {

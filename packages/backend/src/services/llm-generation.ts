@@ -86,6 +86,8 @@ export interface GenerateOptions {
   prompt: string;
   existingTriggerEvents?: string[];
   existingFlowGraph?: FlowGraph;
+  /** When set, the system prompt focuses the LLM on this node (per-node chat). */
+  focusedNodeId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +114,7 @@ export function findUnknownToolCalls(code: string): string[] {
 
 function buildSystemPrompt(
   existing?: { triggerEvents: string[]; flowGraph?: FlowGraph },
+  focusedNodeId?: string,
 ): string {
   let prompt = `You are a workflow code generator for a customer support system.
 
@@ -214,6 +217,37 @@ If the user's request implies additional triggers, add them to the trigger_event
 If the new request introduces unsupported capabilities, reject it — do NOT silently ignore the unsupported parts.`;
   }
 
+  if (focusedNodeId && existing?.flowGraph) {
+    const graph = existing.flowGraph;
+    const focusedNode = graph.nodes.find((n) => n.id === focusedNodeId);
+    if (focusedNode) {
+      const upstreamIds = graph.edges
+        .filter((e) => e.target === focusedNodeId)
+        .map((e) => e.source);
+      const downstreamIds = graph.edges
+        .filter((e) => e.source === focusedNodeId)
+        .map((e) => e.target);
+      const neighborIds = new Set([...upstreamIds, ...downstreamIds]);
+      const neighbors = graph.nodes.filter((n) => neighborIds.has(n.id));
+
+      prompt += `
+
+NODE-FOCUSED EDIT — the user is editing a specific node in the workflow.
+
+Focused node:
+  id: "${focusedNode.id}", type: "${focusedNode.type}", label: "${focusedNode.label}"${focusedNode.code ? `\n  code: ${JSON.stringify(focusedNode.code)}` : ""}
+
+${neighbors.length > 0 ? `Immediate neighbors:\n${neighbors.map((n) => `  - id: "${n.id}", type: "${n.type}", label: "${n.label}"${n.code ? `, code: ${JSON.stringify(n.code)}` : ""}`).join("\n")}` : "This node has no immediate neighbors."}
+
+Rules for node-focused edits:
+  - The focused node ("${focusedNode.id}") is the PRIMARY subject of the user's request.
+  - You MAY add, remove, or modify neighboring nodes and edges when the change structurally requires it (e.g. removing the focused node and reconnecting edges, inserting a new node before/after, changing the type which affects edge wiring).
+  - You MUST NOT modify nodes that are unrelated to the focused node unless the user explicitly asks.
+  - If the user asks to remove the focused node, reconnect its incoming edges to its downstream nodes to maintain a valid DAG.
+  - Always return the COMPLETE flow graph (all nodes and edges), not just the changed parts.`;
+    }
+  }
+
   return prompt;
 }
 
@@ -232,7 +266,7 @@ export async function generateWorkflow(
         }
       : undefined;
 
-  const systemPrompt = buildSystemPrompt(existing);
+  const systemPrompt = buildSystemPrompt(existing, options.focusedNodeId);
 
   const response = await getClient().chat.completions.create({
     model: "gpt-4o",

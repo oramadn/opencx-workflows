@@ -91,6 +91,7 @@ export function WorkflowBuilderPage() {
         const result = await generateWorkflow({
           prompt,
           workflowId: workflow?.id,
+          focusedNodeId: selectedNodeId ?? undefined,
         });
         setWorkflow(result);
 
@@ -114,7 +115,7 @@ export function WorkflowBuilderPage() {
         setLoading(false);
       }
     },
-    [workflow?.id, navigate],
+    [workflow?.id, navigate, selectedNodeId],
   );
 
   const handleRename = useCallback(
@@ -223,6 +224,8 @@ export function WorkflowBuilderPage() {
           history={history}
           loading={loading}
           onSubmit={handleSubmit}
+          selectedNode={selectedNode}
+          onClearNodeFocus={() => setSelectedNodeId(null)}
         />
       </div>
 

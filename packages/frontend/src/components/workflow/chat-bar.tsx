@@ -1,8 +1,9 @@
-import { ArrowUp, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { ArrowUp, ChevronDown, ChevronUp, Loader2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import type { FlowNodeDescriptor } from "@/types/workflow";
 
 export interface PromptEntry {
   role: "user" | "assistant";
@@ -14,9 +15,19 @@ interface ChatBarProps {
   history: PromptEntry[];
   loading: boolean;
   onSubmit: (prompt: string) => void;
+  /** When set, prompts are scoped to this node and a label is shown. */
+  selectedNode?: FlowNodeDescriptor | null;
+  /** Called when the user dismisses the node-focus indicator. */
+  onClearNodeFocus?: () => void;
 }
 
-export function ChatBar({ history, loading, onSubmit }: ChatBarProps) {
+export function ChatBar({
+  history,
+  loading,
+  onSubmit,
+  selectedNode,
+  onClearNodeFocus,
+}: ChatBarProps) {
   const [value, setValue] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const [historyCollapsed, setHistoryCollapsed] = useState(false);
@@ -65,6 +76,7 @@ export function ChatBar({ history, loading, onSubmit }: ChatBarProps) {
   const hasHistory = history.length > 0 || loading;
   const isExpanded = isFocused || value.trim().length > 0;
   const showHistory = isExpanded && hasHistory && !historyCollapsed;
+  const hasNodeFocus = !!selectedNode;
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-4 pb-4">
@@ -132,6 +144,28 @@ export function ChatBar({ history, loading, onSubmit }: ChatBarProps) {
           </ScrollArea>
         )}
 
+        {/* Node-focus indicator */}
+        {hasNodeFocus && (
+          <div className="flex items-center gap-1.5 border-b border-border px-3 py-1.5">
+            <span className="truncate text-xs text-muted-foreground">
+              Editing
+            </span>
+            <span className="inline-flex max-w-[14rem] items-center gap-1 truncate rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+              {selectedNode.label}
+            </span>
+            {onClearNodeFocus && (
+              <button
+                type="button"
+                onClick={onClearNodeFocus}
+                className="ml-auto flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                title="Stop editing this node"
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Input row */}
         <form
           className="flex items-end gap-2 p-2"
@@ -147,11 +181,13 @@ export function ChatBar({ history, loading, onSubmit }: ChatBarProps) {
           <textarea
             ref={textareaRef}
             placeholder={
-              isFocused
-                ? history.length > 0
-                  ? "Describe changes to your workflow..."
-                  : "Describe your workflow with natural language..."
-                : "Ask AI..."
+              hasNodeFocus
+                ? `Describe changes to "${selectedNode.label}"...`
+                : isFocused
+                  ? history.length > 0
+                    ? "Describe changes to your workflow..."
+                    : "Describe your workflow with natural language..."
+                  : "Ask AI..."
             }
             value={value}
             onChange={handleInput}

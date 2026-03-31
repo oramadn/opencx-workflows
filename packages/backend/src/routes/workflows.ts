@@ -86,6 +86,10 @@ export function workflowsRouter(): express.Router {
 
     const workflowId =
       typeof req.body?.workflowId === "string" ? req.body.workflowId : null;
+    const focusedNodeId =
+      typeof req.body?.focusedNodeId === "string"
+        ? req.body.focusedNodeId.trim()
+        : undefined;
 
     if (workflowId && !isUuid(workflowId)) {
       res.status(400).json({ error: "Invalid workflowId" });
@@ -114,6 +118,7 @@ export function workflowsRouter(): express.Router {
         prompt,
         existingTriggerEvents,
         existingFlowGraph,
+        focusedNodeId: workflowId ? focusedNodeId : undefined,
       });
     } catch (err) {
       const message =
