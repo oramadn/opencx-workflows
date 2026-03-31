@@ -316,7 +316,11 @@ export function WorkflowSdkReferencePanel({
               <Accordion.Root
                 key={query.trim()}
                 type="multiple"
-                defaultValue={[]}
+                defaultValue={
+                  query.trim()
+                    ? filtered.map((s) => s.id)
+                    : []
+                }
                 className="space-y-2"
               >
                 {filtered.map((section) => (

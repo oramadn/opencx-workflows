@@ -154,16 +154,7 @@ export const SDK_REFERENCE_SECTIONS: SdkReferenceSection[] = [
 export function itemMatchesQuery(item: SdkReferenceItem, q: string): boolean {
   if (!q.trim()) return true;
   const needle = q.trim().toLowerCase();
-  const hay = [
-    item.id,
-    item.title,
-    item.summary,
-    item.examplePrompt,
-    ...item.attributes,
-  ]
-    .join(" ")
-    .toLowerCase();
-  return hay.includes(needle);
+  return item.title.toLowerCase().includes(needle);
 }
 
 export function filterSdkReferenceSections(
