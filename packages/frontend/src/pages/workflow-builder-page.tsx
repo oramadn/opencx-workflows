@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Plus } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -9,6 +10,7 @@ import {
   updateNodeCode,
   updateNodeLabel,
 } from "@/api/workflows";
+import { Button } from "@/components/ui/button";
 import { WorkflowCanvas } from "@/components/workflow/canvas/workflow-canvas";
 import {
   ChatBar,
@@ -16,6 +18,7 @@ import {
 } from "@/components/workflow/chat-bar";
 import { SidePanel } from "@/components/workflow/side-panel";
 import { WorkflowTitle } from "@/components/workflow/workflow-title";
+import { cn } from "@/lib/utils";
 import type { FlowNodeDescriptor, WorkflowDetail } from "@/types/workflow";
 
 export function WorkflowBuilderPage() {
@@ -29,6 +32,7 @@ export function WorkflowBuilderPage() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [savingCode, setSavingCode] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
+  const [referenceMode, setReferenceMode] = useState(false);
 
   const PANEL_MIN = 280;
   const PANEL_MAX = 900;
@@ -178,6 +182,25 @@ export function WorkflowBuilderPage() {
           </div>
         )}
 
+        <div className="absolute right-3 top-3 z-10">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className={cn(
+              "size-9 rounded-lg border-border bg-background/95 shadow-sm backdrop-blur-sm",
+              referenceMode &&
+                "border-primary/50 ring-2 ring-primary/25 bg-primary/5",
+            )}
+            onClick={() => setReferenceMode((v) => !v)}
+            title="Toggle workflow SDK reference in the side panel"
+            aria-label="Toggle workflow SDK reference"
+            aria-pressed={referenceMode}
+          >
+            <Plus className="size-4" />
+          </Button>
+        </div>
+
         <WorkflowCanvas
           flowGraph={workflow?.flowGraph ?? null}
           loading={loading}
@@ -205,7 +228,10 @@ export function WorkflowBuilderPage() {
 
       {/* Right panel — node code inspector (resizable) */}
       <div
-        className="relative hidden shrink-0 border-l border-border lg:block"
+        className={cn(
+          "relative shrink-0 border-l border-border",
+          referenceMode ? "block" : "hidden lg:block",
+        )}
         style={{ width: panelWidth }}
       >
         {/* Drag handle */}
@@ -219,7 +245,11 @@ export function WorkflowBuilderPage() {
           }}
         />
         <SidePanel
-          key={`${selectedNode?.id ?? ""}:${selectedNode?.code ?? ""}`}
+          key={
+            referenceMode
+              ? "sdk-reference"
+              : `${selectedNode?.id ?? ""}:${selectedNode?.code ?? ""}`
+          }
           workflow={workflow}
           selectedNode={selectedNode}
           onSaveCode={handleSaveNodeCode}
@@ -227,6 +257,8 @@ export function WorkflowBuilderPage() {
           onRenameWorkflow={handleRename}
           savingCode={savingCode}
           codeError={codeError}
+          referenceMode={referenceMode}
+          onExitReference={() => setReferenceMode(false)}
         />
       </div>
     </div>

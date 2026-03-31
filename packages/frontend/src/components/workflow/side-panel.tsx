@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { WorkflowSdkReferencePanel } from "@/components/workflow/workflow-sdk-reference-panel";
 import { formatWorkflowCode } from "@/lib/format-workflow-code";
 import type {
   FlowNodeDescriptor,
@@ -34,6 +35,9 @@ interface SidePanelProps {
   onRenameWorkflow: (name: string) => Promise<void>;
   savingCode: boolean;
   codeError: string | null;
+  /** When true, panel shows SDK reference (triggers, flow control, actions) instead of tabs. */
+  referenceMode?: boolean;
+  onExitReference?: () => void;
 }
 
 type TabId = "config" | "code";
@@ -320,6 +324,8 @@ export function SidePanel({
   onRenameWorkflow,
   savingCode,
   codeError,
+  referenceMode = false,
+  onExitReference,
 }: SidePanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>("config");
 
@@ -380,6 +386,16 @@ export function SidePanel({
 
   const configLabel = hasNode ? "Details" : "Workflow";
   const codeLabel = "Code";
+
+  if (referenceMode) {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        <WorkflowSdkReferencePanel
+          onClose={onExitReference ?? (() => {})}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
