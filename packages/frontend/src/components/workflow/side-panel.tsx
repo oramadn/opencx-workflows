@@ -1,6 +1,7 @@
 import { javascript } from "@codemirror/lang-javascript";
+import { syntaxHighlighting } from "@codemirror/language";
 import { type Diagnostic, linter } from "@codemirror/lint";
-import { oneDark } from "@codemirror/theme-one-dark";
+import { oneDarkHighlightStyle } from "@codemirror/theme-one-dark";
 import * as acorn from "acorn";
 import { EditorView, basicSetup } from "codemirror";
 import {
@@ -41,6 +42,74 @@ interface SidePanelProps {
 }
 
 type TabId = "config" | "code";
+
+/** Editor chrome + gutter use app tokens; `baseTheme` avoids CodeMirror dark-layer overrides from the One Dark *palette* theme. */
+const workflowCodeChrome = EditorView.baseTheme({
+  "&": {
+    color: "var(--foreground)",
+    backgroundColor: "var(--background)",
+  },
+  ".cm-scroller": { backgroundColor: "var(--background)" },
+  ".cm-content": { caretColor: "var(--foreground)" },
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--primary)" },
+  "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
+    {
+      backgroundColor: "color-mix(in oklch, var(--primary) 35%, transparent)",
+    },
+  ".cm-gutters": {
+    backgroundColor: "var(--background)",
+    color: "var(--muted-foreground)",
+    border: "none",
+    borderRight: "1px solid var(--border)",
+  },
+  ".cm-gutter": {
+    backgroundColor: "var(--background)",
+  },
+  ".cm-lineNumbers .cm-gutterElement": {
+    padding: "0 0.65rem 0 0.5rem",
+    minWidth: "2.25rem",
+    textAlign: "right",
+    fontSize: "13px",
+    fontVariantNumeric: "tabular-nums",
+    lineHeight: "1.5",
+  },
+  ".cm-foldGutter .cm-gutterElement": {
+    color: "var(--muted-foreground)",
+  },
+  ".cm-activeLineGutter": {
+    color: "var(--foreground)",
+    backgroundColor: "color-mix(in oklch, var(--accent) 40%, transparent)",
+  },
+  ".cm-activeLine": {
+    backgroundColor: "color-mix(in oklch, var(--accent) 40%, transparent)",
+  },
+  ".cm-selectionMatch": {
+    backgroundColor: "color-mix(in oklch, var(--primary) 18%, transparent)",
+  },
+  "&.cm-focused .cm-matchingBracket, &.cm-focused .cm-nonmatchingBracket": {
+    backgroundColor: "color-mix(in oklch, var(--primary) 22%, transparent)",
+  },
+  ".cm-foldPlaceholder": {
+    backgroundColor: "transparent",
+    border: "none",
+    color: "var(--muted-foreground)",
+  },
+  ".cm-panels": {
+    backgroundColor: "var(--card)",
+    color: "var(--card-foreground)",
+  },
+  ".cm-tooltip": {
+    backgroundColor: "var(--popover)",
+    color: "var(--popover-foreground)",
+    border: "1px solid var(--border)",
+  },
+  ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
+    backgroundColor: "var(--accent)",
+    color: "var(--accent-foreground)",
+  },
+});
+
+const workflowCodeHighlighting = syntaxHighlighting(oneDarkHighlightStyle);
 
 // ---------------------------------------------------------------------------
 // Acorn linter (reused from previous implementation)
@@ -126,7 +195,8 @@ function CodeMirrorEditor({
       extensions: [
         basicSetup,
         javascript(),
-        oneDark,
+        workflowCodeHighlighting,
+        workflowCodeChrome,
         createStepLinter(nodeType),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
@@ -165,7 +235,8 @@ function ReadOnlyCodeViewer({ code }: { code: string }) {
       extensions: [
         basicSetup,
         javascript(),
-        oneDark,
+        workflowCodeHighlighting,
+        workflowCodeChrome,
         EditorView.editable.of(false),
         EditorView.theme({
           "&": { height: "100%", fontSize: "13px" },
@@ -389,7 +460,7 @@ export function SidePanel({
 
   if (referenceMode) {
     return (
-      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
         <WorkflowSdkReferencePanel
           onClose={onExitReference ?? (() => {})}
         />
@@ -398,9 +469,9 @@ export function SidePanel({
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden bg-background">
       {/* Tab bar */}
-      <div className="flex border-b border-border">
+      <div className="flex border-b border-border bg-background">
         <TabButton
           active={activeTab === "config"}
           onClick={() => setActiveTab("config")}
@@ -423,7 +494,7 @@ export function SidePanel({
       )}
 
       {/* Tab body */}
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden bg-background">
         {activeTab === "config" ? (
           hasNode ? (
             <NodeConfigTab
@@ -640,7 +711,7 @@ function NodeCodeTab({
 }) {
   if (!isEditable) {
     return (
-      <div className="flex h-full flex-col overflow-auto bg-[#22272e] p-4">
+      <div className="flex h-full flex-col overflow-auto bg-background p-4">
         <p className="mb-2 text-xs text-muted-foreground">
           Trigger nodes do not contain editable code.
         </p>
@@ -649,8 +720,8 @@ function NodeCodeTab({
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="min-h-0 flex-1 overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden bg-background">
+      <div className="min-h-0 flex-1 overflow-hidden bg-background">
         <CodeMirrorEditor
           key={node.id}
           initialCode={baseCode}
@@ -686,7 +757,7 @@ function OverallCodeTab({ code }: { code: string }) {
   }
 
   return (
-    <div className="h-full overflow-hidden">
+    <div className="h-full overflow-hidden bg-background">
       <ReadOnlyCodeViewer code={code} />
     </div>
   );
